@@ -541,11 +541,8 @@ function layoutHierarchy() {
     return (depth + 1) * 250; // rough estimate per level
   }
 
-  // Sort roots: widest subtrees first so they anchor each row
-  roots.sort((a, b) => subtreeWidth[b.id] - subtreeWidth[a.id]);
-
   // Place root subtrees in rows, wrapping when row gets too wide
-  const MAX_ROW_WIDTH = 3000;
+  const MAX_ROW_WIDTH = 1400;
   let rows = [[]];
   let rowWidths = [0];
 
