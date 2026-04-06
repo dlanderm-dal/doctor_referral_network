@@ -2680,6 +2680,85 @@ function importData(event) {
   reader.readAsText(file); event.target.value='';
 }
 
+window.openPasteModal = function() {
+  document.getElementById('paste-modal').style.display = '';
+  document.getElementById('paste-json-input').value = '';
+  setTimeout(() => document.getElementById('paste-json-input').focus(), 100);
+};
+window.closePasteModal = function() {
+  document.getElementById('paste-modal').style.display = 'none';
+};
+window.importFromPaste = function() {
+  const raw = document.getElementById('paste-json-input').value.trim();
+  if (!raw) { toast('Paste your JSON first'); return; }
+  try {
+    const data = JSON.parse(raw);
+    world.querySelectorAll('.doctor-node').forEach(el => el.remove());
+    doctors = data.doctors || []; edges = data.edges || []; nextId = data.nextId || 1;
+    customTags = data.customTags || []; tagOverrides = data.tagOverrides || {};
+    customActionTypes = data.customActionTypes || []; actionTypeOverrides = data.actionTypeOverrides || {};
+    globalNotes = data.globalNotes || '';
+    viewMode = data.viewMode || 'nucleus';
+    callListOrder = data.callListOrder || [];
+    doctors.forEach(d => {
+      if (d.addedAt === undefined) d.addedAt = new Date().toISOString();
+      if (d.isNode === undefined) d.isNode = false;
+      if (d.isPatient === undefined) d.isPatient = false;
+      if (d.isDeactivated === undefined) d.isDeactivated = false;
+      if (d.documents === undefined) d.documents = [];
+      (d.actions || []).forEach(a => { if (!a.links) a.links = []; });
+    });
+    document.getElementById('notes-textarea').value = globalNotes;
+    document.querySelectorAll('.tb-view-opt').forEach(el => el.classList.remove('active'));
+    const avb = document.getElementById('view-' + viewMode);
+    if (avb) avb.classList.add('active');
+    save(); renderAll(); fitView();
+    closePasteModal();
+    toast('Imported from paste!');
+  } catch (err) { toast('Invalid JSON — check your paste'); }
+};
+window.importFromEmptyPaste = function() {
+  const raw = document.getElementById('empty-paste-input').value.trim();
+  if (!raw) { toast('Paste your JSON first'); return; }
+  try {
+    const data = JSON.parse(raw);
+    world.querySelectorAll('.doctor-node').forEach(el => el.remove());
+    doctors = data.doctors || []; edges = data.edges || []; nextId = data.nextId || 1;
+    customTags = data.customTags || []; tagOverrides = data.tagOverrides || {};
+    customActionTypes = data.customActionTypes || []; actionTypeOverrides = data.actionTypeOverrides || {};
+    globalNotes = data.globalNotes || '';
+    viewMode = data.viewMode || 'nucleus';
+    callListOrder = data.callListOrder || [];
+    doctors.forEach(d => {
+      if (d.addedAt === undefined) d.addedAt = new Date().toISOString();
+      if (d.isNode === undefined) d.isNode = false;
+      if (d.isPatient === undefined) d.isPatient = false;
+      if (d.isDeactivated === undefined) d.isDeactivated = false;
+      if (d.documents === undefined) d.documents = [];
+      (d.actions || []).forEach(a => { if (!a.links) a.links = []; });
+    });
+    document.getElementById('notes-textarea').value = globalNotes;
+    document.querySelectorAll('.tb-view-opt').forEach(el => el.classList.remove('active'));
+    const avb = document.getElementById('view-' + viewMode);
+    if (avb) avb.classList.add('active');
+    save(); renderAll(); fitView();
+    toast('Imported from paste!');
+  } catch (err) { toast('Invalid JSON — check your paste'); }
+};
+window.copyJsonToClipboard = function() {
+  const data = JSON.stringify({doctors, edges, nextId, customTags, tagOverrides, customActionTypes, actionTypeOverrides, globalNotes, viewMode, callListOrder}, null, 2);
+  navigator.clipboard.writeText(data).then(() => {
+    toast('JSON copied to clipboard!');
+  }).catch(() => {
+    // Fallback for older browsers / iPad
+    const ta = document.createElement('textarea');
+    ta.value = data; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('JSON copied to clipboard!');
+  });
+};
+
 function handleFileDrop(event) {
   const file = event.dataTransfer.files[0];
   if (!file) return;

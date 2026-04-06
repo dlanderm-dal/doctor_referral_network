@@ -40,6 +40,8 @@
   </div>
   <button class="tb" onclick="exportData()" title="Save">&#128190; Save</button>
   <button class="tb" onclick="document.getElementById('import-file').click()" title="Load">&#128194; Load</button>
+  <button class="tb" onclick="openPasteModal()" title="Paste JSON">&#128203; Paste</button>
+  <button class="tb" onclick="copyJsonToClipboard()" title="Copy JSON">&#128203; Copy</button>
   <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
   <div class="tb-dropdown-wrap">
     <button class="tb" onclick="this.parentElement.classList.toggle('open')">+ Add &#9662;</button>
@@ -88,6 +90,9 @@
     <h2>Load a network file to get started</h2>
     <p>Drag and drop your <strong>doctor-network.json</strong> file here</p>
     <button class="drop-browse" onclick="document.getElementById('import-file').click()">or click to browse</button>
+    <div class="drop-divider">or paste JSON</div>
+    <textarea id="empty-paste-input" class="sb-textarea" style="min-height:80px;max-width:400px;width:100%;font-size:11px;font-family:monospace;margin:0 auto" placeholder="Paste your JSON here..."></textarea>
+    <button class="tb primary" onclick="importFromEmptyPaste()" style="margin-top:6px">Import from Paste</button>
     <div class="drop-divider">or</div>
     <button class="tb primary" onclick="openSidebarNew()">+ Add Doctor</button>
   </div>
@@ -144,6 +149,19 @@
 </div>
 
 <div id="toast"></div>
+
+<div id="paste-modal" style="display:none">
+  <div class="paste-modal-backdrop" onclick="closePasteModal()"></div>
+  <div class="paste-modal-box">
+    <div class="paste-modal-header">
+      <div style="font-size:15px;font-weight:600;color:#1e293b">Paste JSON</div>
+      <button class="sb-close" onclick="closePasteModal()">&times;</button>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin:0 0 8px">Open your <strong>doctor-network.json</strong> file, select all, copy, and paste below.</p>
+    <textarea id="paste-json-input" class="sb-textarea" style="min-height:200px;font-size:11px;font-family:monospace" placeholder='Paste your JSON here...'></textarea>
+    <button class="tb primary" onclick="importFromPaste()" style="margin-top:8px;width:100%">Import</button>
+  </div>
+</div>
 
 <script src="app.js"></script>
 <script src="comment-system.js"></script>

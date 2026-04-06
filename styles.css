@@ -786,6 +786,20 @@ body {
 .zm:hover { background: #f1f5f9; }
 #zoom-label { font-size: 11px; color: #94a3b8; min-width: 34px; text-align: center; }
 
+/* ===== PASTE MODAL ===== */
+.paste-modal-backdrop {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 999;
+}
+.paste-modal-box {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: white; border-radius: 12px; padding: 20px; width: 90%; max-width: 500px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2); z-index: 1000;
+}
+.paste-modal-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+
 /* ===== DEBUG ===== */
 #debug-panel { position: fixed; bottom: 16px; left: 16px; z-index: 100; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 #dataview-toggle, #debug-toggle {
