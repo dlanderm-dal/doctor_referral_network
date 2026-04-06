@@ -529,17 +529,58 @@ function layoutHierarchy() {
     });
   }
 
-  // Place all root subtrees left to right
-  const TREE_GAP = 200;
-  let totalRootWidth = roots.reduce((sum, r, i) => {
-    return sum + subtreeWidth[r.id] + (i < roots.length - 1 ? TREE_GAP : 0);
-  }, 0);
+  // Place root subtrees in a grid (wrap after ~3-4 per row based on width)
+  const TREE_GAP = 160;
+  const MAX_ROW_WIDTH = 1800; // max width before wrapping to next row of roots
 
-  let rx = -totalRootWidth / 2;
+  // Calculate height of each root's subtree (for row spacing)
+  const subtreeDepth = {};
+  function calcDepth(id, d) {
+    subtreeDepth[id] = Math.max(subtreeDepth[id] || 0, d);
+    (childrenOf[id] || []).forEach(cid => calcDepth(cid, d + 1));
+  }
+  roots.forEach(r => calcDepth(r.id, 0));
+  function treeMaxDepth(rid) {
+    let maxD = 0;
+    const stack = [rid];
+    while (stack.length) {
+      const id = stack.pop();
+      maxD = Math.max(maxD, subtreeDepth[id] || 0);
+      (childrenOf[id] || []).forEach(cid => stack.push(cid));
+    }
+    return maxD;
+  }
+
+  // Arrange roots in rows
+  let rows = [[]];
+  let currentRowWidth = 0;
   roots.forEach((r, i) => {
     const tw = subtreeWidth[r.id];
-    placeSubtree(r.id, rx + tw / 2, 0, i);
-    rx += tw + TREE_GAP;
+    if (currentRowWidth > 0 && currentRowWidth + TREE_GAP + tw > MAX_ROW_WIDTH) {
+      rows.push([]);
+      currentRowWidth = 0;
+    }
+    rows[rows.length - 1].push(r);
+    currentRowWidth += tw + (currentRowWidth > 0 ? TREE_GAP : 0);
+  });
+
+  let globalY = 0;
+  rows.forEach(row => {
+    const rowTotalWidth = row.reduce((sum, r, i) => {
+      return sum + subtreeWidth[r.id] + (i < row.length - 1 ? TREE_GAP : 0);
+    }, 0);
+
+    let rx = -rowTotalWidth / 2;
+    let rowMaxDepth = 0;
+    row.forEach((r, i) => {
+      const tw = subtreeWidth[r.id];
+      placeSubtree(r.id, rx + tw / 2, globalY, i);
+      rx += tw + TREE_GAP;
+      rowMaxDepth = Math.max(rowMaxDepth, treeMaxDepth(r.id));
+    });
+
+    // Next row starts below the deepest subtree in this row
+    globalY += (rowMaxDepth + 1) * V_SPACING + STAGGER + 100;
   });
 }
 
