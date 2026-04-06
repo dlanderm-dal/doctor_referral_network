@@ -451,10 +451,10 @@ function layoutHierarchy() {
   if (activeDocs.length === 0) return;
 
   const NODE_WIDTH = 260;
-  const H_GAP = 30;        // gap between children within the same parent
-  const SIBLING_GAP = 140;  // extra gap between sibling subtrees (the big separator)
-  const V_SPACING = 220;   // vertical distance between levels
-  const STAGGER = 60;      // vertical offset for alternating sibling groups
+  const H_GAP = 20;        // gap between leaf children within same parent
+  const SIBLING_GAP = 80;  // extra gap between sibling subtrees
+  const V_SPACING = 200;   // vertical distance between levels
+  const STAGGER = 50;      // vertical offset for alternating sibling groups
 
   // Identify roots (no incoming edges)
   const targeted = new Set(activeEdges.map(e => e.to));
@@ -529,58 +529,18 @@ function layoutHierarchy() {
     });
   }
 
-  // Place root subtrees in a grid (wrap after ~3-4 per row based on width)
-  const TREE_GAP = 160;
-  const MAX_ROW_WIDTH = 1800; // max width before wrapping to next row of roots
+  // Place all root subtrees on one horizontal line
+  const TREE_GAP = 100;
 
-  // Calculate height of each root's subtree (for row spacing)
-  const subtreeDepth = {};
-  function calcDepth(id, d) {
-    subtreeDepth[id] = Math.max(subtreeDepth[id] || 0, d);
-    (childrenOf[id] || []).forEach(cid => calcDepth(cid, d + 1));
-  }
-  roots.forEach(r => calcDepth(r.id, 0));
-  function treeMaxDepth(rid) {
-    let maxD = 0;
-    const stack = [rid];
-    while (stack.length) {
-      const id = stack.pop();
-      maxD = Math.max(maxD, subtreeDepth[id] || 0);
-      (childrenOf[id] || []).forEach(cid => stack.push(cid));
-    }
-    return maxD;
-  }
+  let totalRootWidth = roots.reduce((sum, r, i) => {
+    return sum + subtreeWidth[r.id] + (i < roots.length - 1 ? TREE_GAP : 0);
+  }, 0);
 
-  // Arrange roots in rows
-  let rows = [[]];
-  let currentRowWidth = 0;
+  let rx = -totalRootWidth / 2;
   roots.forEach((r, i) => {
     const tw = subtreeWidth[r.id];
-    if (currentRowWidth > 0 && currentRowWidth + TREE_GAP + tw > MAX_ROW_WIDTH) {
-      rows.push([]);
-      currentRowWidth = 0;
-    }
-    rows[rows.length - 1].push(r);
-    currentRowWidth += tw + (currentRowWidth > 0 ? TREE_GAP : 0);
-  });
-
-  let globalY = 0;
-  rows.forEach(row => {
-    const rowTotalWidth = row.reduce((sum, r, i) => {
-      return sum + subtreeWidth[r.id] + (i < row.length - 1 ? TREE_GAP : 0);
-    }, 0);
-
-    let rx = -rowTotalWidth / 2;
-    let rowMaxDepth = 0;
-    row.forEach((r, i) => {
-      const tw = subtreeWidth[r.id];
-      placeSubtree(r.id, rx + tw / 2, globalY, i);
-      rx += tw + TREE_GAP;
-      rowMaxDepth = Math.max(rowMaxDepth, treeMaxDepth(r.id));
-    });
-
-    // Next row starts below the deepest subtree in this row
-    globalY += (rowMaxDepth + 1) * V_SPACING + STAGGER + 100;
+    placeSubtree(r.id, rx + tw / 2, 0, 0);
+    rx += tw + TREE_GAP;
   });
 }
 
