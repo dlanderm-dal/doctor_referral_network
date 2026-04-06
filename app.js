@@ -760,8 +760,14 @@ function renderNode(doc) {
     </div>
   `;
 
+  el.addEventListener('mousedown', e => {
+    if(e.target.closest('.n-add-ref')||e.target.closest('.n-connect-btn')||e.target.closest('.n-link')||e.target.closest('.phone-pill')) return;
+    if (e.button !== 0) return; // left click only
+    startNodeDrag(doc, el, e);
+  });
   el.addEventListener('click', e => {
-    if(e.target.closest('.n-add-ref')||e.target.closest('.n-connect-btn')||e.target.closest('.n-link')) return;
+    if(e.target.closest('.n-add-ref')||e.target.closest('.n-connect-btn')||e.target.closest('.n-link')||e.target.closest('.phone-pill')) return;
+    if (draggingNode && draggingNode.moved) return; // was a drag, not a click
     if (connectingFrom !== null) { finishConnect(doc.id); return; }
     openSidebarEdit(doc.id);
   });
@@ -2178,6 +2184,42 @@ window.saveNodeSidebar = function() {
   closeSidebar();
   toast(`${personName} added with ${count} doctor${count!==1?'s':''}!`);
 };
+
+// ===== NODE DRAGGING =====
+let draggingNode = null;   // { doc, el, startX, startY, origX, origY, moved }
+let dragThreshold = 5;     // pixels before drag activates
+
+function startNodeDrag(doc, el, e) {
+  e.stopPropagation();
+  draggingNode = {
+    doc, el,
+    startX: e.clientX,
+    startY: e.clientY,
+    origX: doc.x,
+    origY: doc.y,
+    moved: false
+  };
+}
+
+window.addEventListener('mousemove', e => {
+  if (!draggingNode) return;
+  const dx = e.clientX - draggingNode.startX;
+  const dy = e.clientY - draggingNode.startY;
+  if (!draggingNode.moved && Math.abs(dx) + Math.abs(dy) < dragThreshold) return;
+  draggingNode.moved = true;
+  draggingNode.doc.x = draggingNode.origX + dx / zoom;
+  draggingNode.doc.y = draggingNode.origY + dy / zoom;
+  draggingNode.el.style.left = draggingNode.doc.x + 'px';
+  draggingNode.el.style.top = draggingNode.doc.y + 'px';
+  renderEdges();
+});
+
+window.addEventListener('mouseup', () => {
+  if (draggingNode && draggingNode.moved) {
+    save();
+  }
+  draggingNode = null;
+});
 
 // ===== PAN & ZOOM EVENTS =====
 canvas.addEventListener('mousedown', e => {
