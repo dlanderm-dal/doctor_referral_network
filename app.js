@@ -46,6 +46,9 @@ const DEFAULT_ACTION_TYPES = [
   { id: 'act-visited', label: 'Visited', color: 'green' },
   { id: 'act-noresp', label: 'No Response', color: 'red' },
   { id: 'act-redirected', label: 'Redirected', color: 'amber' },
+  { id: 'act-appt', label: 'Appointment Scheduled', color: 'green' },
+  { id: 'act-patient', label: 'Now a Patient', color: 'green' },
+  { id: 'act-dealbreaker', label: 'Dealbreaker', color: 'red' },
   { id: 'act-custom', label: 'Custom', color: 'gray' },
   { id: 'act-document', label: 'Drop Document', color: 'teal' },
 ];
@@ -129,6 +132,14 @@ function updatePanelLayout() {
   document.getElementById('scroll-btn').classList.toggle('active', scrollOpen);
   document.getElementById('notes-panel').classList.toggle('half', notesOpen && scrollOpen);
   document.getElementById('scroll-panel').classList.toggle('half', notesOpen && scrollOpen);
+  // Shrink canvas viewport when left panels are open
+  canvas.classList.toggle('left-panel-open', notesOpen || scrollOpen);
+  // Re-clamp pan after viewport resize
+  setTimeout(() => { clampPan(); updateTransform(); }, 260);
+}
+function updateSidebarViewport() {
+  canvas.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
+  setTimeout(() => { clampPan(); updateTransform(); }, 260);
 }
 window.toggleNotes = function() {
   document.getElementById('notes-panel').classList.toggle('open');
@@ -165,30 +176,34 @@ function renderScrollPanel() {
     }).join('');
     const lastAction = (d.actions||[]).length > 0 ? d.actions[d.actions.length-1] : null;
     const dateStr = lastAction ? lastAction.date : '';
-    return `<div class="scroll-item ${d.isPatient?'is-patient':''}" data-scroll-id="${d.id}">
-      <div class="scroll-item-top">
-        <div>
-          <div class="scroll-item-name">${d.name}</div>
-          ${d.specialty ? `<div class="scroll-item-spec">${d.specialty}</div>` : ''}
+    const phoneNums = detectPhoneNumbers(d.notes||'');
+    const phoneHtml = phoneNums.length > 0 ? `<div class="scroll-item-phone">${phoneNums.map(p => `<a href="tel:${phoneDigits(p)}" onclick="event.stopPropagation()" class="phone-pill" style="font-size:11px;padding:2px 8px">${p}</a>`).join('')}</div>` : '';
+    const apptAction = (d.actions||[]).slice().reverse().find(a => a.appointmentDate);
+    const apptHtml = apptAction ? `<div class="scroll-item-appt">Appointment Scheduled: ${new Date(apptAction.appointmentDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>` : '';
+    const hasAppt = !!(apptAction);
+    return `<div class="scroll-item ${d.isPatient?'is-patient':''} ${hasAppt?'has-appointment':''}" data-scroll-id="${d.id}">
+      <div class="scroll-item-content">
+        <div class="scroll-item-top">
+          <div>
+            <div class="scroll-item-name">${d.name}</div>
+            ${d.specialty ? `<div class="scroll-item-spec">${d.specialty}</div>` : ''}
+          </div>
+          ${dateStr ? `<div class="scroll-item-date">${dateStr}</div>` : ''}
         </div>
-        ${dateStr ? `<div class="scroll-item-date">${dateStr}</div>` : ''}
-        <button class="scroll-item-edit" data-scroll-edit="${d.id}" title="Edit">✎</button>
+        ${phoneHtml}
+        ${apptHtml}
+        ${tagsHtml ? `<div class="scroll-item-tags">${tagsHtml}</div>` : ''}
       </div>
-      ${tagsHtml ? `<div class="scroll-item-tags">${tagsHtml}</div>` : ''}
+      <button class="scroll-item-edit" data-scroll-edit="${d.id}" title="Edit">✎</button>
     </div>`;
   }).join('');
-
-  list.querySelectorAll('.scroll-item').forEach(item => {
-    item.addEventListener('click', e => {
-      if (e.target.closest('.scroll-item-edit')) return;
-      panToNode(parseInt(item.dataset.scrollId));
-    });
-  });
 
   list.querySelectorAll('.scroll-item-edit').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      openSidebarEdit(parseInt(btn.dataset.scrollEdit));
+      const id = parseInt(btn.dataset.scrollEdit);
+      panToNode(id);
+      openSidebarEdit(id);
     });
   });
 }
@@ -199,15 +214,17 @@ function panToNode(docId) {
   const el = document.getElementById('node-' + docId);
   const cw = canvas.clientWidth, ch = canvas.clientHeight;
   const nodeW = 240, nodeH = el ? el.offsetHeight : 100;
+  // Zoom in closer to the node
+  zoom = Math.min(1.5, Math.max(zoom, 1.0));
   // Center the node in the viewport
   pan.x = cw / 2 - (doc.x + nodeW / 2) * zoom;
   pan.y = ch / 2 - (doc.y + nodeH / 2) * zoom;
   clampPan();
   updateTransform();
-  // Highlight the node briefly
+  // Highlight the node with yellow border for 3 seconds
   if (el) {
     el.classList.add('highlighted');
-    setTimeout(() => el.classList.remove('highlighted'), 1500);
+    setTimeout(() => el.classList.remove('highlighted'), 3000);
   }
 }
 document.getElementById('notes-textarea').addEventListener('input', (e) => { globalNotes = e.target.value; save(); });
@@ -451,130 +468,212 @@ function layoutHierarchy() {
   if (activeDocs.length === 0) return;
 
   const NODE_WIDTH = 260;
-  const H_GAP = 40;         // gap between sibling subtrees under the same parent
-  const V_PAD = 60;         // padding below a parent card before children start
-  const TREE_GAP = 120;     // gap between separate root trees
+  const H_GAP = 50;            // horizontal gap between sibling subtrees
+  const TREE_GAP = 160;        // horizontal gap between root tree groups
+  const STD_CELL_H = 160;      // standard cell height reference
+  const V_GAP = STD_CELL_H * 2; // vertical gap = 2x cell height
 
-  // Identify roots (no incoming edges)
+  // Fast lookup
+  const docById = {};
+  activeDocs.forEach(d => { docById[d.id] = d; });
+
+  function getCardH(id) {
+    const el = document.getElementById('node-' + id);
+    if (el) return el.offsetHeight;
+    const doc = docById[id];
+    return doc ? estimateNodeHeight(doc) : 140;
+  }
+
+  // --- Step 1: Build tree structure ---
+  // Each child gets ONE parent for layout; extra parent edges become cross-links
+  const childrenOf = {};
+  const parentOf = {};
+  activeDocs.forEach(d => { childrenOf[d.id] = []; });
+
+  const sharedChildEdges = [];
+  activeEdges.forEach(e => {
+    if (!activeIds.has(e.from) || !activeIds.has(e.to)) return;
+    if (parentOf[e.to] === undefined) {
+      parentOf[e.to] = e.from;
+      if (childrenOf[e.from]) childrenOf[e.from].push(e.to);
+    } else {
+      sharedChildEdges.push(e);
+    }
+  });
+
+  // Prune cycles via visited set
+  const visited = new Set();
+  function pruneTree(id) {
+    if (visited.has(id)) return;
+    visited.add(id);
+    childrenOf[id] = (childrenOf[id] || []).filter(cid => !visited.has(cid));
+    childrenOf[id].forEach(cid => pruneTree(cid));
+  }
+
+  // Identify roots (no incoming primary edge)
   const targeted = new Set(activeEdges.map(e => e.to));
   let roots = activeDocs.filter(d => !targeted.has(d.id));
   if (roots.length === 0) roots = [activeDocs[0]];
 
-  // Build adjacency (parent -> children)
-  const childrenOf = {};
-  activeDocs.forEach(d => { childrenOf[d.id] = []; });
-  const visited = new Set();
-  activeEdges.forEach(e => {
-    if (childrenOf[e.from]) childrenOf[e.from].push(e.to);
-  });
+  roots.forEach(r => pruneTree(r.id));
 
-  // Pass 1: calculate subtree width (bottom-up)
-  const subtreeWidth = {};
-  function calcWidth(id) {
-    if (visited.has(id)) return 0;
-    visited.add(id);
-    const kids = (childrenOf[id] || []).filter(cid => !visited.has(cid));
-    childrenOf[id] = kids;
-    if (kids.length === 0) {
-      subtreeWidth[id] = NODE_WIDTH;
-      return NODE_WIDTH;
-    }
-    let totalW = 0;
-    kids.forEach((cid, i) => {
-      totalW += calcWidth(cid);
-      if (i < kids.length - 1) totalW += H_GAP;
-    });
-    subtreeWidth[id] = Math.max(NODE_WIDTH, totalW);
-    return subtreeWidth[id];
-  }
-
-  visited.clear();
-  roots.forEach(r => calcWidth(r));
-
-  // Assign orphans as additional roots
+  // Orphans become roots
   activeDocs.forEach(d => {
     if (!visited.has(d.id)) {
       visited.add(d.id);
-      subtreeWidth[d.id] = NODE_WIDTH;
       childrenOf[d.id] = [];
       roots.push(d);
     }
   });
 
-  // Pass 2: place subtree at (xCenter, y)
-  // Vertical gap is based on the parent card's actual height
+  // --- Step 2: Order roots by most non-ruled-out descendants ---
+  function countActive(id) {
+    let count = 0;
+    const doc = docById[id];
+    if (doc && !doc.closedOut && !doc.isDeactivated) count = 1;
+    (childrenOf[id] || []).forEach(cid => { count += countActive(cid); });
+    return count;
+  }
+
+  const rootActiveCount = {};
+  roots.forEach(r => { rootActiveCount[r.id] = countActive(r.id) - 1; }); // subtract self
+  roots.sort((a, b) => rootActiveCount[b.id] - rootActiveCount[a.id]);
+
+  // --- Step 3: Adjust root order for shared children adjacency ---
+  function findRoot(id) {
+    let cur = id;
+    while (parentOf[cur] !== undefined) cur = parentOf[cur];
+    return cur;
+  }
+
+  // Build adjacency preferences between roots from shared edges
+  const rootAdjPairs = [];
+  sharedChildEdges.forEach(e => {
+    const r1 = findRoot(e.from);
+    const r2 = findRoot(e.to);
+    if (r1 !== r2) rootAdjPairs.push([r1, r2]);
+  });
+
+  // Greedy reorder: walk sorted roots, pull adjacent partners next to each other
+  if (rootAdjPairs.length > 0) {
+    const placed = new Set();
+    const ordered = [];
+
+    function placeRoot(id) {
+      if (placed.has(id)) return;
+      const r = roots.find(r => r.id === id);
+      if (!r) return;
+      placed.add(id);
+      ordered.push(r);
+      // Pull any partners that should be adjacent
+      rootAdjPairs.forEach(([a, b]) => {
+        if (a === id && !placed.has(b)) placeRoot(b);
+        if (b === id && !placed.has(a)) placeRoot(a);
+      });
+    }
+
+    roots.forEach(r => placeRoot(r.id));
+    roots = ordered;
+  }
+
+  // --- Step 4: Adjust sibling order for shared children at boundaries ---
+  sharedChildEdges.forEach(e => {
+    const primaryParent = parentOf[e.to];
+    const primaryRoot = findRoot(primaryParent);
+    const secondaryRoot = findRoot(e.from);
+
+    const primaryIdx = roots.findIndex(r => r.id === primaryRoot);
+    const secondaryIdx = roots.findIndex(r => r.id === secondaryRoot);
+    if (primaryIdx < 0 || secondaryIdx < 0) return;
+
+    const kids = childrenOf[primaryParent];
+    const childIdx = kids.indexOf(e.to);
+    if (childIdx < 0) return;
+
+    // Move shared child to boundary side closest to secondary parent's group
+    kids.splice(childIdx, 1);
+    if (primaryIdx < secondaryIdx) {
+      kids.push(e.to);      // rightmost
+    } else {
+      kids.unshift(e.to);   // leftmost
+    }
+  });
+
+  // --- Step 5: Bottom-up subtree width calculation ---
+  const subtreeW = {};
+  function calcWidth(id) {
+    const kids = childrenOf[id] || [];
+    if (kids.length === 0) {
+      subtreeW[id] = NODE_WIDTH;
+      return NODE_WIDTH;
+    }
+    let total = 0;
+    kids.forEach((cid, i) => {
+      total += calcWidth(cid);
+      if (i < kids.length - 1) total += H_GAP;
+    });
+    subtreeW[id] = Math.max(NODE_WIDTH, total);
+    return subtreeW[id];
+  }
+  roots.forEach(r => calcWidth(r.id));
+
+  // --- Step 6: Top-down placement ---
+  // Place children in a row, then center parent above them.
+  // Returns the actual bottom Y of the deepest descendant.
   function placeSubtree(id, xCenter, y) {
-    const doc = activeDocs.find(d => d.id === id);
-    if (!doc) return;
-    doc.x = xCenter - NODE_WIDTH / 2;
-    doc.y = y;
+    const doc = docById[id];
+    if (!doc) return y + 140;
 
     const kids = childrenOf[id] || [];
-    if (kids.length === 0) return;
+    const cardH = getCardH(id);
 
-    // Vertical spacing based on this node's card height
-    const el = document.getElementById('node-' + id);
-    const cardH = el ? el.offsetHeight : estimateNodeHeight(doc);
-    const childY = y + cardH + V_PAD;
+    if (kids.length === 0) {
+      doc.x = xCenter - NODE_WIDTH / 2;
+      doc.y = y;
+      return y + cardH;
+    }
 
-    const totalChildrenWidth = kids.reduce((sum, cid, i) => {
-      return sum + subtreeWidth[cid] + (i < kids.length - 1 ? H_GAP : 0);
+    // Place children first at the level below
+    const childY = y + cardH + V_GAP;
+    const totalChildW = kids.reduce((sum, cid, i) => {
+      return sum + subtreeW[cid] + (i < kids.length - 1 ? H_GAP : 0);
     }, 0);
 
-    let cx = xCenter - totalChildrenWidth / 2;
+    let cx = xCenter - totalChildW / 2;
+    let maxBottomY = childY;
     kids.forEach(cid => {
-      const cw = subtreeWidth[cid];
-      placeSubtree(cid, cx + cw / 2, childY);
+      const cw = subtreeW[cid];
+      const bottomY = placeSubtree(cid, cx + cw / 2, childY);
+      maxBottomY = Math.max(maxBottomY, bottomY);
       cx += cw + H_GAP;
     });
-  }
 
-  // Calculate total depth of each root's subtree (for row height)
-  function treeMaxDepth(id, d) {
-    let max = d;
-    (childrenOf[id] || []).forEach(cid => { max = Math.max(max, treeMaxDepth(cid, d + 1)); });
-    return max;
-  }
-  function treeMaxHeight(rid) {
-    // Estimate pixel height: depth levels * (tallest card + padding)
-    const depth = treeMaxDepth(rid, 0);
-    return (depth + 1) * 250; // rough estimate per level
-  }
-
-  // Place root subtrees in rows, wrapping when row gets too wide
-  const MAX_ROW_WIDTH = 1400;
-  let rows = [[]];
-  let rowWidths = [0];
-
-  roots.forEach(r => {
-    const tw = subtreeWidth[r.id];
-    const lastRow = rows.length - 1;
-    if (rowWidths[lastRow] > 0 && rowWidths[lastRow] + TREE_GAP + tw > MAX_ROW_WIDTH) {
-      rows.push([]);
-      rowWidths.push(0);
+    // Center parent above the midpoint of its children's actual positions
+    const firstChild = docById[kids[0]];
+    const lastChild = docById[kids[kids.length - 1]];
+    if (firstChild && lastChild) {
+      const childrenMidX = (firstChild.x + lastChild.x + NODE_WIDTH) / 2;
+      doc.x = childrenMidX - NODE_WIDTH / 2;
+    } else {
+      doc.x = xCenter - NODE_WIDTH / 2;
     }
-    const ri = rows.length - 1;
-    rows[ri].push(r);
-    rowWidths[ri] += (rowWidths[ri] > 0 ? TREE_GAP : 0) + tw;
+    doc.y = y;
+
+    return maxBottomY;
+  }
+
+  // Place each root subtree side by side
+  let rx = 0;
+  roots.forEach(r => {
+    const tw = subtreeW[r.id];
+    placeSubtree(r.id, rx + tw / 2, 0);
+    rx += tw + TREE_GAP;
   });
 
-  let globalY = 0;
-  rows.forEach(row => {
-    const rowWidth = row.reduce((sum, r, i) => {
-      return sum + subtreeWidth[r.id] + (i > 0 ? TREE_GAP : 0);
-    }, 0);
-
-    let rx = -rowWidth / 2;
-    let rowMaxH = 0;
-    row.forEach(r => {
-      const tw = subtreeWidth[r.id];
-      placeSubtree(r.id, rx + tw / 2, globalY);
-      rx += tw + TREE_GAP;
-      rowMaxH = Math.max(rowMaxH, treeMaxHeight(r.id));
-    });
-
-    globalY += rowMaxH + 80; // gap between rows of root trees
-  });
+  // Center the entire layout around x=0
+  const totalWidth = rx - TREE_GAP;
+  const offsetX = -totalWidth / 2;
+  activeDocs.forEach(d => { d.x += offsetX; });
 }
 
 // ===== VIEW MODE =====
@@ -768,6 +867,8 @@ function renderNode(doc) {
   if(doc.isNode) el.classList.add('is-node'); else el.classList.remove('is-node');
   if(doc.isPatient) el.classList.add('is-patient'); else el.classList.remove('is-patient');
   if(doc.isDeactivated) el.classList.add('is-deactivated'); else el.classList.remove('is-deactivated');
+  const hasAppt = (doc.actions||[]).some(a => a.appointmentDate);
+  if(hasAppt && !doc.isPatient) el.classList.add('has-appointment'); else el.classList.remove('has-appointment');
 
   const tagsHtml=(doc.tags||[]).map(tid=>{const tag=getTagById(tid);return tag?`<span class="n-tag ${tag.color||'gray'}">${tag.label}</span>`:''}).join('');
   const miscHtml=(doc.miscNotes||[]).map(m=>`<span class="n-tag gray">${m}</span>`).join('');
@@ -1119,7 +1220,18 @@ function renderActionDropdown(containerId) {
     return `<button class="sb-action-bank-btn ${sel?'selected':''}" data-atid="${at.id}" style="--btn-color:${TAG_COLOR_HEX[at.color]||'#94a3b8'}">${at.label}</button>`;
   }).join('');
 
-  area.innerHTML = `<div class="sb-action-bank-grid">${bankHtml}</div>`;
+  const customInputHtml = selectedActionTypeId === 'act-custom'
+    ? `<input type="text" class="sb-input" id="sb-custom-action-label" placeholder="Type custom action name..." style="font-size:12px;padding:6px 10px;margin-top:6px">`
+    : '';
+
+  area.innerHTML = `<div class="sb-action-bank-grid">${bankHtml}</div>${customInputHtml}`;
+
+  // Update date field label when Appointment Scheduled is selected
+  const dateLabel = document.getElementById('sb-action-date-label');
+  if (dateLabel) {
+    dateLabel.textContent = selectedActionTypeId === 'act-appt' ? 'Appointment Date' : '';
+    dateLabel.style.display = selectedActionTypeId === 'act-appt' ? '' : 'none';
+  }
 
   area.querySelectorAll('.sb-action-bank-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1244,11 +1356,17 @@ function renderPhonePills() {
 }
 
 // ===== SIDEBAR =====
-function openSidebar() { sidebar.classList.add('open'); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+    closeSidebar();
+  }
+});
+function openSidebar() { sidebar.classList.add('open'); updateSidebarViewport(); }
 function closeSidebar() {
   sidebar.classList.remove('open');
   sidebarMode = null; sidebarDocId = null; sidebarParentId = null;
   sidebarNodeDoctors = []; sidebarRefDoctors = []; openDropdownId = null;
+  updateSidebarViewport();
 }
 
 function openSidebarNew() {
@@ -1588,20 +1706,53 @@ function buildSidebar(doc, parentDoc) {
   // "Refer to existing doctor" search — only in edit mode
   const referExistingHtml = isEdit ? `
     <div class="sb-section">
-      <div class="sb-label">Connect to other doctor</div>
+      <div class="sb-label">Connect to other doctor on the diagram</div>
       <div class="sb-search-wrap">
         <input type="text" class="sb-input" id="sb-refer-search" placeholder="Search by name..." style="font-size:13px" autocomplete="off">
         <div class="sb-search-results" id="sb-refer-results" style="display:none"></div>
       </div>
     </div>` : '';
 
+  // Build breadcrumb path: TopRoot > ... > DirectParent > Current
+  let breadcrumbHtml = '';
+  if (isEdit && doc.id) {
+    const path = [];
+    let curId = doc.id;
+    const seen = new Set();
+    while (curId !== undefined && !seen.has(curId)) {
+      seen.add(curId);
+      const d = doctors.find(dd => dd.id === curId);
+      if (d) path.unshift(d);
+      const parentEdge = edges.find(e => e.to === curId);
+      curId = parentEdge ? parentEdge.from : undefined;
+    }
+    if (path.length > 1) {
+      let crumbs;
+      if (path.length <= 3) {
+        crumbs = path;
+      } else {
+        // Show: top root > ... > direct parent > current
+        crumbs = [path[0], null, path[path.length - 2], path[path.length - 1]];
+      }
+      breadcrumbHtml = `<div class="sb-breadcrumb">${crumbs.map(d => {
+        if (d === null) return '<span class="sb-breadcrumb-sep">...</span>';
+        const isCur = d.id === doc.id;
+        return `<span class="sb-breadcrumb-item ${isCur ? 'current' : ''}" ${!isCur ? `onclick="openSidebarEdit(${d.id})" style="cursor:pointer"` : ''}>${d.name || 'Unnamed'}</span>`;
+      }).join('<span class="sb-breadcrumb-sep">›</span>')}</div>`;
+    }
+  }
+
   sidebar.innerHTML = `
     <div class="sb-header">
       <input type="text" class="sb-header-name" id="sb-name" value="${doc.name||''}" placeholder="Doctor Name">
       <input type="text" class="sb-header-spec" id="sb-specialty" value="${doc.specialty||''}" placeholder="Specialty">
-      <button class="sb-close" onclick="closeSidebar()">&times;</button>
+      <div class="sb-close-wrap">
+        <button class="sb-close" onclick="closeSidebar()">&times;</button>
+        <span class="sb-close-hint">or hit Esc</span>
+      </div>
     </div>
     <div class="sb-body">
+      ${breadcrumbHtml}
       <div class="sb-section">
         <div class="sb-label">Notes <span class="sb-label-hint">Phone, address, hours, point of contact</span></div>
         <textarea class="sb-textarea sb-textarea-tall" id="sb-notes">${doc.notes||''}</textarea>
@@ -1616,20 +1767,12 @@ function buildSidebar(doc, parentDoc) {
           <button class="tag-dd-add-btn" onclick="addLink()">+</button>
         </div>
       </div>
-      <div class="sb-section sb-tags-compact">
-        <div id="sb-tags-area"></div>
-        <div class="sb-misc-field" id="sb-misc-area">
-          <input type="text" class="sb-input" id="sb-misc-input" placeholder="Misc note..." style="font-size:12px">
-          <button class="tag-dd-add-btn" onclick="addMiscNote()" style="margin-top:4px">+ Add</button>
-          <div id="sb-misc-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${miscListHtml}</div>
-        </div>
-      </div>
-      ${referExistingHtml}
       <div class="sb-section">
         <div class="sb-label">Add Action</div>
         <div class="sb-action-box">
           <div class="sb-action-bank" id="sb-action-type-area"></div>
           <input type="text" class="sb-input" id="sb-action-detail" placeholder="Details (optional)" style="font-size:13px">
+          <div class="sb-label" id="sb-action-date-label" style="font-size:10px;margin-bottom:2px;color:#16a34a;font-weight:600;display:none">Appointment Date</div>
           <input type="date" class="sb-input" id="sb-action-date" value="${todayISO()}" style="font-size:12px">
           <div style="margin-top:4px">
             <div class="sb-label" style="font-size:10px;margin-bottom:4px">Links</div>
@@ -1648,6 +1791,14 @@ function buildSidebar(doc, parentDoc) {
         </div>
       </div>
       ${actionLogHtml}
+      <div class="sb-section sb-tags-compact">
+        <div id="sb-tags-area"></div>
+        <div class="sb-misc-field" id="sb-misc-area">
+          <input type="text" class="sb-input" id="sb-misc-input" placeholder="Misc note..." style="font-size:12px">
+          <button class="tag-dd-add-btn" onclick="addMiscNote()" style="margin-top:4px">+ Add</button>
+          <div id="sb-misc-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${miscListHtml}</div>
+        </div>
+      </div>
       ${isEdit ? `<div class="sb-section">
         <div class="sb-label">Documents</div>
         <div class="sb-drop-zone" id="sb-drop-zone">
@@ -1669,21 +1820,10 @@ function buildSidebar(doc, parentDoc) {
           `).join('')}
         </div>
       </div>` : ''}
+      ${referExistingHtml}
       <div class="sb-section" style="border-bottom:none;display:flex;flex-direction:column;gap:10px">
-        ${isEdit && !doc.closedOut && !doc.isPatient ? `
-          <div class="sb-patient-box">
-            <div class="sb-label" style="color:#166534;margin-bottom:6px">🏥 Now a Patient</div>
-            <input type="text" class="sb-input sb-patient-input" id="sb-patient-reason" placeholder="e.g. First appointment scheduled, accepted as patient...">
-            <button class="sb-now-patient" onclick="markAsPatient()">Mark as Patient</button>
-          </div>` : ''}
         ${isEdit && doc.isPatient ? '<button class="sb-reopen" onclick="undoPatient()" style="border-color:#86efac;background:#f0fdf4;color:#166534">Undo Patient Status</button>' : ''}
         ${isEdit && doc.isDeactivated ? '<button class="sb-reopen" onclick="reactivateDoctor()" style="border-color:#fcd34d;background:#fefce8;color:#92400e">Re-activate this doctor</button>' : ''}
-        ${isEdit && !doc.closedOut ? `
-          <div class="sb-dealbreaker-box">
-            <div class="sb-label" style="color:#dc2626;margin-bottom:6px">⛔ Dealbreaker</div>
-            <input type="text" class="sb-input sb-dealbreaker-input" id="sb-dealbreaker-reason" placeholder="e.g. Won't see me, don't like their attitude...">
-            <button class="sb-close-out" onclick="closeOutDoctor()">Mark as Dealbreaker</button>
-          </div>` : ''}
         ${isEdit && doc.closedOut ? '<button class="sb-reopen" onclick="reopenDoctor()">Reopen this doctor</button>' : ''}
         <div style="padding:4px 0">
           <label class="sb-toggle-row" style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -1732,7 +1872,15 @@ function buildSidebar(doc, parentDoc) {
       if (d && d.actions) {
         const sbBody = sidebar.querySelector('.sb-body');
         const scrollPos = sbBody ? sbBody.scrollTop : 0;
+        const removedAction = d.actions[parseInt(btn.dataset.actionIdx)];
         d.actions.splice(parseInt(btn.dataset.actionIdx), 1);
+        // If we removed a dealbreaker/deactivated action and no others remain, undo the status
+        if (removedAction && removedAction.type === 'closed' && !d.actions.some(a => a.type === 'closed')) {
+          d.closedOut = false;
+        }
+        if (removedAction && removedAction.type === 'deactivated' && !d.actions.some(a => a.type === 'deactivated')) {
+          d.isDeactivated = false;
+        }
         save(); renderNode(d); renderEdges(); buildSidebar(d);
         requestAnimationFrame(() => {
           const newBody = sidebar.querySelector('.sb-body');
@@ -1795,10 +1943,37 @@ function renderLinksList() {
   list.innerHTML = sidebarTempLinks.map((l,i) => `
     <div class="sb-link-item">
       <a href="${l.url}" target="_blank" rel="noopener">${l.title||l.url}</a>
+      <span class="sb-link-edit" data-link-edit-idx="${i}" title="Edit">&#9998;</span>
       <span class="sb-link-del" data-link-idx="${i}">&times;</span>
     </div>`).join('');
   list.querySelectorAll('.sb-link-del').forEach(btn => {
     btn.addEventListener('click', () => { sidebarTempLinks.splice(parseInt(btn.dataset.linkIdx), 1); renderLinksList(); });
+  });
+  list.querySelectorAll('.sb-link-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.linkEditIdx);
+      const link = sidebarTempLinks[idx];
+      if (!link) return;
+      const item = btn.closest('.sb-link-item');
+      item.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:4px;width:100%">
+          <input type="text" class="sb-input" value="${(link.title||'').replace(/"/g,'&quot;')}" placeholder="Title" style="font-size:11px;padding:5px 8px" id="link-edit-title-${idx}">
+          <div style="display:flex;gap:4px">
+            <input type="url" class="sb-input" value="${link.url.replace(/"/g,'&quot;')}" placeholder="https://..." style="flex:1;font-size:11px;padding:5px 8px" id="link-edit-url-${idx}">
+            <button class="tag-dd-add-btn" id="link-edit-save-${idx}">&#10003;</button>
+            <button class="tag-dd-add-btn" id="link-edit-cancel-${idx}" style="background:#f1f5f9;color:#64748b">&#10007;</button>
+          </div>
+        </div>`;
+      document.getElementById(`link-edit-save-${idx}`).addEventListener('click', () => {
+        const newTitle = document.getElementById(`link-edit-title-${idx}`).value.trim();
+        let newUrl = document.getElementById(`link-edit-url-${idx}`).value.trim();
+        if (!newUrl) { renderLinksList(); return; }
+        if (!newUrl.match(/^https?:\/\//)) newUrl = 'https://' + newUrl;
+        sidebarTempLinks[idx] = { title: newTitle, url: newUrl };
+        renderLinksList();
+      });
+      document.getElementById(`link-edit-cancel-${idx}`).addEventListener('click', () => { renderLinksList(); });
+    });
   });
 }
 
@@ -1835,13 +2010,29 @@ window.addAction = function() {
 
   const actionType = selectedActionTypeId ? getActionTypeById(selectedActionTypeId) : null;
   if (!actionType) { toast('Select an action type'); return; }
-  const type = actionType.label;
+  const customLabel = document.getElementById('sb-custom-action-label')?.value.trim();
+  const type = (selectedActionTypeId === 'act-custom' && customLabel) ? customLabel : actionType.label;
   const detail=detailEl.value.trim();
   const dateVal=dateEl.value ? new Date(dateEl.value+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
   const text = detail ? `${type}: ${detail}` : type;
   const dotColor = actionType.color || 'gray';
 
+  const isAppt = selectedActionTypeId === 'act-appt';
+  const isPatientAction = selectedActionTypeId === 'act-patient';
+  const isDealbreaker = selectedActionTypeId === 'act-dealbreaker';
+
+  if (isDealbreaker && !detail) { toast('Enter a reason for the dealbreaker'); detailEl.focus(); return; }
+
   const action = { text, date:dateVal, type:'action', dotColor, tags:[...sidebarTempActionTags], miscTags:[...sidebarTempActionMisc], links:[...sidebarTempActionLinks] };
+  if (isAppt && dateVal) {
+    action.appointmentDate = dateEl.value;
+  }
+  if (isPatientAction) {
+    action.type = 'patient';
+  }
+  if (isDealbreaker) {
+    action.type = 'closed';
+  }
 
   // Check deactivate checkbox
   const deactivateChecked = document.getElementById('sb-action-deactivate')?.checked || false;
@@ -1851,6 +2042,12 @@ window.addAction = function() {
     if(d) {
       if(!d.actions) d.actions=[];
       d.actions.push(action);
+      if (isPatientAction) {
+        d.isPatient = true;
+      }
+      if (isDealbreaker) {
+        d.closedOut = true;
+      }
       if (deactivateChecked) {
         d.isDeactivated = true;
         d.actions.push({ text: 'De-activated', date: todayStr(), type: 'deactivated', dotColor: 'amber', tags: [], miscTags: [], links: [] });
@@ -2221,8 +2418,17 @@ window.saveNodeSidebar = function() {
 // ===== NODE DRAGGING =====
 let draggingNode = null;   // { doc, el, startX, startY, origX, origY, moved }
 let dragThreshold = 5;     // pixels before drag activates
+let nodeDragEnabled = true;
+
+window.toggleNodeDrag = function() {
+  nodeDragEnabled = document.getElementById('toggle-drag')?.checked ?? true;
+};
 
 function startNodeDrag(doc, el, e) {
+  // Re-read checkbox state directly in case onchange didn't fire
+  const cb = document.getElementById('toggle-drag');
+  if (cb && !cb.checked) { nodeDragEnabled = false; return; }
+  if (!nodeDragEnabled) return;
   e.stopPropagation();
   draggingNode = {
     doc, el,
@@ -2540,6 +2746,10 @@ window.renderDataView = function() {
     // Docs
     const docCount = (d.documents||[]).length;
 
+    // Appointment Date — find the most recent appointmentDate from actions
+    const apptAction = (d.actions||[]).slice().reverse().find(a => a.appointmentDate);
+    const apptDate = apptAction ? new Date(apptAction.appointmentDate + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+
     return `<tr class="${rc}" data-dv-id="${d.id}">
       <td><div style="display:flex;align-items:center">
         <span class="dv-indent" style="width:${indent}px"></span>
@@ -2553,6 +2763,7 @@ window.renderDataView = function() {
       <td>${actionsCell}</td>
       <td>${linkCount}</td>
       <td>${docCount}</td>
+      <td style="font-size:11px;color:#16a34a">${apptDate}</td>
     </tr>`;
   }).join('');
 

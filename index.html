@@ -15,8 +15,8 @@
 <body>
 
 <div id="toolbar">
-  <button class="tb" id="notes-btn" onclick="toggleNotes()" title="Scratchpad">Notes</button>
-  <button class="tb" id="scroll-btn" onclick="toggleScroll()" title="Active Doctors List">Scroll</button>
+  <button class="tb" id="scroll-btn" onclick="toggleScroll()" title="To Call List" style="font-weight:700;color:white;background:#16a34a;border-color:#16a34a">To Call List</button>
+  <button class="tb" id="notes-btn" onclick="toggleNotes()" title="Scratchpad">Scratch Notes</button>
   <h1>Doctor Referral Network</h1>
   <span id="autosave-indicator">Saved</span>
   <div class="toolbar-spacer"></div>
@@ -24,9 +24,10 @@
     <button class="tb" onclick="this.parentElement.classList.toggle('open')">View &#9662;</button>
     <div class="tb-dropdown-menu">
       <button class="tb-dropdown-item" onclick="fitView(); this.closest('.tb-dropdown-wrap').classList.remove('open')">Fit View</button>
+      <button class="tb-dropdown-item" onclick="refreshLayout(); this.closest('.tb-dropdown-wrap').classList.remove('open')">&#8635; Refresh Layout</button>
       <label class="tb-dropdown-item" style="display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="hide-inactive" onchange="toggleHideInactive()" style="width:14px;height:14px;accent-color:#ef4444">
-        Hide Inactive
+        <input type="checkbox" id="toggle-drag" onchange="toggleNodeDrag()" style="width:14px;height:14px;accent-color:#3b82f6" checked>
+        Enable Node Dragging
       </label>
       <div class="tb-dropdown-divider"></div>
       <button class="tb-dropdown-item tb-view-opt" id="view-nucleus" onclick="setViewMode('nucleus'); this.closest('.tb-dropdown-wrap').classList.remove('open')">
@@ -37,17 +38,17 @@
       </button>
     </div>
   </div>
+  <button class="tb" onclick="exportData()" title="Save">&#128190; Save</button>
+  <button class="tb" onclick="document.getElementById('import-file').click()" title="Load">&#128194; Load</button>
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
   <div class="tb-dropdown-wrap">
-    <button class="tb" onclick="this.parentElement.classList.toggle('open')">Options &#9662;</button>
-    <div class="tb-dropdown-menu">
-      <button class="tb-dropdown-item" onclick="exportData(); this.closest('.tb-dropdown-wrap').classList.remove('open')">Save</button>
-      <button class="tb-dropdown-item" onclick="document.getElementById('import-file').click(); this.closest('.tb-dropdown-wrap').classList.remove('open')">Load</button>
+    <button class="tb" onclick="this.parentElement.classList.toggle('open')">+ Add &#9662;</button>
+    <div class="tb-dropdown-menu" style="min-width:260px">
+      <div style="padding:8px 12px;font-size:11px;font-weight:700;color:#64748b;line-height:1.4;border-bottom:1px solid #e2e8f0;margin-bottom:4px"><strong>Tip:</strong> Most doctors should be added as referrals from an existing doctor's card (click a doctor → "+ Add referral"). Use this only for standalone doctors not connected to anyone on your diagram yet.</div>
+      <button class="tb-dropdown-item" onclick="openSidebarNew(); this.closest('.tb-dropdown-wrap').classList.remove('open')">+ Add Doctor</button>
+      <button class="tb-dropdown-item" onclick="openSidebarAddNode(); this.closest('.tb-dropdown-wrap').classList.remove('open')">+ Add Node</button>
     </div>
   </div>
-  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
-  <button class="tb refresh" onclick="refreshLayout()" title="Re-arrange all nodes">↻ Refresh Layout</button>
-  <button class="tb secondary" onclick="openSidebarAddNode()">+ Add Node</button>
-  <button class="tb primary" onclick="openSidebarNew()">+ Add Doctor</button>
 </div>
 
 <div id="notes-panel">
@@ -133,6 +134,7 @@
           <th style="width:60px">Actions</th>
           <th style="width:60px">Links</th>
           <th style="width:50px">Docs</th>
+          <th style="min-width:110px"><span class="lh-new-content">Appt Date</span></th>
         </tr>
       </thead>
       <tbody id="dv-tbody"></tbody>
@@ -145,5 +147,6 @@
 
 <script src="app.js"></script>
 <script src="comment-system.js"></script>
+<!-- lh-implemented: mnndj040avmvw0, mnndjji6wdel6n, mnndkhmk7zqvfg, mnndl4l6qh3zec, mnndm4memjhsqn, mnndn08x3u6gpo, mnndswnu9gnw5p -->
 </body>
 </html>

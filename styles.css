@@ -37,7 +37,7 @@ body {
 /* Toolbar dropdowns */
 .tb-dropdown-wrap { position: relative; }
 .tb-dropdown-menu {
-  display: none; position: absolute; top: 100%; left: 0; margin-top: 4px;
+  display: none; position: absolute; top: 100%; right: 0; margin-top: 4px;
   background: white; border: 1px solid #e2e8f0; border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 200;
   min-width: 150px; padding: 4px; overflow: hidden;
@@ -97,23 +97,26 @@ body {
   display: flex; flex-direction: column; gap: 4px;
 }
 .scroll-item {
-  padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  padding: 10px 12px; border-radius: 8px;
   border: 1px solid #e2e8f0; background: white;
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex; flex-direction: row; align-items: center; gap: 10px;
   transition: all 0.15s;
 }
-.scroll-item:hover { background: #f8fafc; border-color: #93c5fd; }
+.scroll-item-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .scroll-item.is-patient { border-left: 3px solid #22c55e; }
+.scroll-item.has-appointment { border-left: 3px solid #22c55e; background: #f0fdf4; }
 .scroll-item-top { display: flex; align-items: center; gap: 8px; }
 .scroll-item-name { font-size: 13px; font-weight: 600; color: #1e293b; flex: 1; }
 .scroll-item-spec { font-size: 11px; color: #64748b; }
 .scroll-item-date { font-size: 10px; color: #94a3b8; }
+.scroll-item-phone { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.scroll-item-appt { font-size: 12px; font-weight: 600; color: #16a34a; margin-top: 3px; }
 .scroll-item-edit {
-  width: 24px; height: 24px; border-radius: 6px; border: 1px solid #e2e8f0;
-  background: white; color: #94a3b8; cursor: pointer; font-size: 12px;
+  width: 36px; height: 36px; border-radius: 8px; border: 1px solid #3b82f6;
+  background: #3b82f6; color: white; cursor: pointer; font-size: 16px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.scroll-item-edit:hover { background: #eff6ff; color: #3b82f6; border-color: #93c5fd; }
+.scroll-item-edit:hover { background: #2563eb; border-color: #2563eb; }
 .scroll-item-tags { display: flex; flex-wrap: wrap; gap: 3px; }
 .scroll-item-tags .n-tag { font-size: 9px; padding: 1px 6px; }
 #notes-btn.active, #scroll-btn.active { background: #eff6ff; border-color: #93c5fd; color: #1e40af; font-weight: 600; }
@@ -125,7 +128,10 @@ body {
   overflow: hidden; cursor: grab;
   background: radial-gradient(circle at 1px 1px, #d5dbe3 0.5px, transparent 0.5px);
   background-size: 20px 20px;
+  transition: margin-left 0.25s ease, margin-right 0.25s ease;
 }
+#canvas.left-panel-open { margin-left: 340px; }
+#canvas.sidebar-open { margin-right: 420px; }
 #canvas.dragging { cursor: grabbing; }
 #canvas.connecting { cursor: crosshair; }
 #world { position: absolute; top: 0; left: 0; width: 1px; height: 1px; transform-origin: 0 0; }
@@ -175,6 +181,13 @@ body {
 .doctor-node.is-patient:hover { box-shadow: 0 6px 20px rgba(34,197,94,0.18); border-color: #22c55e; }
 .doctor-node.is-patient .n-header { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-bottom-color: #dcfce7; }
 .doctor-node.is-patient .n-name { color: #166534; }
+/* Appointment scheduled (green tint) */
+.doctor-node.has-appointment {
+  background: linear-gradient(145deg, #f0fdf4 0%, #ffffff 60%, #ecfdf5 100%);
+  border-color: #86efac;
+}
+.doctor-node.has-appointment:hover { box-shadow: 0 6px 20px rgba(34,197,94,0.18); border-color: #22c55e; }
+.doctor-node.has-appointment .n-header { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-bottom-color: #dcfce7; }
 /* Deactivated (yellow) */
 .doctor-node.is-deactivated {
   background: linear-gradient(145deg, #fefce8 0%, #ffffff 60%, #fef9c3 100%);
@@ -186,11 +199,11 @@ body {
 /* Closed out (red) */
 .doctor-node.closed-out { opacity: 0.5; border-color: #fca5a5; background: linear-gradient(145deg, #fef2f2, #fff); }
 .doctor-node.closed-out .n-name { text-decoration: line-through; color: #b91c1c; }
-/* Highlighted (for scroll-to) */
-.doctor-node.highlighted { animation: nodeHighlight 1.5s ease-out; }
+/* Highlighted (for scroll-to) — yellow, thick, 3s */
+.doctor-node.highlighted { animation: nodeHighlight 3s ease-out; }
 @keyframes nodeHighlight {
-  0% { box-shadow: 0 0 0 4px rgba(59,130,246,0.5); }
-  100% { box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  0%, 50% { box-shadow: 0 0 0 6px rgba(234,179,8,0.7); border-color: #eab308; }
+  100% { box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-color: #e2e8f0; }
 }
 .n-header { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; border-radius: 12px 12px 0 0; }
 .n-name { font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 2px; }
@@ -283,6 +296,16 @@ body {
   color: #64748b; outline: none; padding: 1px 0; font-family: inherit;
 }
 .sb-header-spec::placeholder { color: #b0bac7; }
+/* Breadcrumb path */
+.sb-breadcrumb {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+  padding: 8px 12px; background: #f8fafc; border-radius: 8px;
+  font-size: 12px; color: #64748b; border: 1px solid #e2e8f0;
+}
+.sb-breadcrumb-item { color: #3b82f6; padding: 2px 4px; border-radius: 4px; }
+.sb-breadcrumb-item:not(.current):hover { background: #eff6ff; text-decoration: underline; }
+.sb-breadcrumb-item.current { color: #1e293b; font-weight: 600; cursor: default; }
+.sb-breadcrumb-sep { color: #94a3b8; margin: 0 2px; font-size: 14px; }
 .sb-title { font-size: 15px; font-weight: 600; flex: 1; }
 .sb-close {
   width: 30px; height: 30px; border-radius: 8px; border: none;
@@ -290,6 +313,8 @@ body {
   display: flex; align-items: center; justify-content: center;
 }
 .sb-close:hover { background: #e2e8f0; }
+.sb-close-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
+.sb-close-hint { font-size: 9px; color: #94a3b8; white-space: nowrap; }
 .sb-body {
   flex: 1; overflow-y: auto; padding: 16px 20px;
   display: flex; flex-direction: column; gap: 14px;
@@ -511,6 +536,8 @@ body {
 }
 .sb-link-item a { color: #3b82f6; text-decoration: none; flex: 1; word-break: break-all; }
 .sb-link-item a:hover { text-decoration: underline; }
+.sb-link-edit { color: #cbd5e1; cursor: pointer; font-size: 13px; padding: 0 2px; }
+.sb-link-edit:hover { color: #3b82f6; }
 .sb-link-del { color: #cbd5e1; cursor: pointer; font-size: 14px; padding: 0 2px; }
 .sb-link-del:hover { color: #ef4444; }
 

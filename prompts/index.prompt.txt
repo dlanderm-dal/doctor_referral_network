@@ -1,0 +1,17 @@
+## Changelog — 2026-04-06
+
+### Annotation Batch: mnndj040avmvw0, mnndjji6wdel6n, mnndkhmk7zqvfg, mnndl4l6qh3zec, mnndm4memjhsqn, mnndn08x3u6gpo, mnndswnu9gnw5p
+
+1. **[mnndj040avmvw0] Edit button for links** — Added a pencil icon (✎) to each link in the sidebar link list. Clicking it opens inline title/URL editing fields with save/cancel buttons. Changes in `app.js` (`renderLinksList` function) and `styles.css` (`.sb-link-edit` styles).
+
+2. **[mnndjji6wdel6n] Save/Load button icons** — Added floppy disk (💾) icon to Save button and folder (📂) icon to Load button in the Options dropdown. Changes in `index.html`.
+
+3. **[mnndkhmk7zqvfg] Remove Hide Inactive** — Removed the "Hide Inactive" checkbox from the View dropdown in `index.html`. The JS references safely no-op since the element no longer exists.
+
+4. **[mnndl4l6qh3zec] Toggle node dragging** — Replaced Hide Inactive with an "Enable Node Dragging" checkbox (on by default) in the View dropdown. Added `toggleNodeDrag()` function and `nodeDragEnabled` flag in `app.js`. When unchecked, nodes cannot be click-dragged.
+
+5. **[mnndm4memjhsqn] Connect label text** — Changed sidebar label from "Connect to other doctor" to "Connect to other doctor on the diagram" in `app.js`.
+
+6. **[mnndn08x3u6gpo] Custom action text input** — When the "Custom" action type button is selected, a text input appears allowing the user to type a custom action name. If filled in, that custom name is used instead of "Custom" in the action log. Changes in `app.js` (`renderActionDropdown` and `addAction`).
+
+7. **[mnndswnu9gnw5p] Appointment Scheduled action** — Added "Appointment Scheduled" as a new default action type (green). When selected, a green "Appointment Date" label appears above the date field. The date is stored as `appointmentDate` on the action object (separate from the regular `date` field). A new "Appt Date" column was added to the Data View table (`index.html` header + `app.js` `renderDataView`) showing the most recent appointment date for each doctor.
