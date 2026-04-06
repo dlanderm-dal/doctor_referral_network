@@ -41,7 +41,15 @@ var CommentSystem = (function () {
     var showImplemented = true;
 
     // ========== BUILD NAVBAR ==========
-    var commentCount = getPageComments().length;
+    var commentCount = 0;
+    (function () {
+      var pc = getPageComments();
+      pc.forEach(function (c) {
+        if (c.resolved || c.status === 'resolved') return;
+        if (c.status === 'active' || !c.status) commentCount++;
+        if (c.replies) { c.replies.forEach(function (r) { if (!r.implemented) commentCount++; }); }
+      });
+    })();
     var navHTML = '' +
       '<nav class="lh-navbar" id="lhNavbar">' +
         '<div class="lh-nav-dropdown-wrap">' +
@@ -1218,21 +1226,7 @@ var CommentSystem = (function () {
         if (c.replies) totalItems += c.replies.length;
       });
 
-      // Comments dropdown badge: total unresolved parents + all their replies
-      var unresolvedWithReplies = 0;
-      pageComments.forEach(function (c) {
-        if (c.resolved || c.status === 'resolved') return;
-        unresolvedWithReplies++;
-        if (c.replies) unresolvedWithReplies += c.replies.length;
-      });
-      if (unresolvedWithReplies > 0) {
-        commentBadge.textContent = unresolvedWithReplies;
-        commentBadge.style.display = 'inline';
-      } else {
-        commentBadge.style.display = 'none';
-      }
-
-      // Export button badge: active parents + unhandled replies
+      // Export button badge: active parents + unhandled replies on implemented
       var exportReady = counts.active;
       pageComments.forEach(function (c) {
         if (c.resolved || c.status === 'resolved') return;
@@ -1240,6 +1234,14 @@ var CommentSystem = (function () {
           c.replies.forEach(function (r) { if (!r.implemented) exportReady++; });
         }
       });
+
+      // Comments dropdown badge: same as export-ready count
+      if (exportReady > 0) {
+        commentBadge.textContent = exportReady;
+        commentBadge.style.display = 'inline';
+      } else {
+        commentBadge.style.display = 'none';
+      }
 
       var exportBadgeEl = batchExportBtn.querySelector('.lh-badge');
       if (!exportBadgeEl) {
