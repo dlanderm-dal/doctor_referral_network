@@ -260,9 +260,21 @@ body {
 #sidebar.open { right: 0; }
 .sb-header {
   padding: 14px 20px; border-bottom: 2px solid #e2e8f0;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; gap: 4px;
   background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+  position: relative;
 }
+.sb-header .sb-close { position: absolute; top: 10px; right: 12px; }
+.sb-header-name {
+  width: 100%; border: none; background: transparent; font-size: 16px; font-weight: 700;
+  color: #1e293b; outline: none; padding: 2px 0; font-family: inherit;
+}
+.sb-header-name::placeholder { color: #94a3b8; font-weight: 400; }
+.sb-header-spec {
+  width: 100%; border: none; background: transparent; font-size: 13px;
+  color: #64748b; outline: none; padding: 1px 0; font-family: inherit;
+}
+.sb-header-spec::placeholder { color: #b0bac7; }
 .sb-title { font-size: 15px; font-weight: 600; flex: 1; }
 .sb-close {
   width: 30px; height: 30px; border-radius: 8px; border: none;
@@ -311,6 +323,26 @@ body {
   resize: vertical; min-height: 50px; line-height: 1.5;
 }
 .sb-textarea:focus { border-color: #93c5fd; }
+.sb-textarea-tall { min-height: 100px; }
+
+/* Action bank (grid of type buttons) */
+.sb-action-bank-grid {
+  display: flex; flex-wrap: wrap; gap: 5px;
+}
+.sb-action-bank-btn {
+  padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0;
+  background: white; color: #475569; cursor: pointer; font-size: 12px;
+  font-family: inherit; font-weight: 500; transition: all 0.15s;
+  opacity: 0.5;
+}
+.sb-action-bank-btn:hover { opacity: 0.8; border-color: var(--btn-color); }
+.sb-action-bank-btn.selected {
+  opacity: 1; background: var(--btn-color); color: white;
+  border-color: var(--btn-color); font-weight: 600;
+}
+
+/* Compact tags section */
+.sb-tags-compact { padding: 6px 12px 10px; }
 
 /* Phone pills */
 .phone-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
@@ -794,12 +826,12 @@ body.comment-mode .lh-navbar { top: 50px !important; z-index: 99 !important; }
 
 body:not(.comment-mode) .lh-navbar,
 body:not(.comment-mode) .lh-sidebar,
+body:not(.comment-mode) .lh-toggle,
 body:not(.comment-mode) .lh-float-bar,
 body:not(.comment-mode) .lh-comment-marker,
 body:not(.comment-mode) .lh-lightbox-overlay,
 body:not(.comment-mode) .lh-resolved-overlay,
 body:not(.comment-mode) .lh-raw-mode-bar,
-body:not(.comment-mode) .lh-popup,
-body:not(.comment-mode) .lh-sidebar-toggle {
+body:not(.comment-mode) .lh-popup {
   display: none !important;
 }

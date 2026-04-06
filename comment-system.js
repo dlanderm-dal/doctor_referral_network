@@ -1181,6 +1181,13 @@ var CommentSystem = (function () {
 
       document.body.appendChild(popup);
       activeCommentPopup = popup;
+
+      // Clamp popup so bottom doesn't go below viewport
+      var popupRect = popup.getBoundingClientRect();
+      if (popupRect.bottom > window.innerHeight) {
+        var newTop = Math.max(0, window.innerHeight - popupRect.height + window.scrollY);
+        popup.style.top = newTop + 'px';
+      }
     }
 
     // ========== COMMENT STORAGE ==========

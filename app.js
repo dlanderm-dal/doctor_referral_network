@@ -934,54 +934,17 @@ function renderActionDropdown(containerId) {
   const area = document.getElementById(containerId);
   if (!area) return;
   const types = allActionTypes();
-  const ddId = containerId + '-dd';
-  const isOpen = openActionDropdownId === ddId;
 
-  const selected = selectedActionTypeId ? getActionTypeById(selectedActionTypeId) : null;
-  const triggerLabel = selected ? selected.label : 'Select action type...';
-
-  const optsHtml = types.map(at => {
+  const bankHtml = types.map(at => {
     const sel = selectedActionTypeId === at.id;
-    return `<div class="tag-dd-opt ${sel?'selected':''}" data-atid="${at.id}">
-      <span class="tag-dd-dot" style="background:${TAG_COLOR_HEX[at.color]||'#94a3b8'}"></span>
-      <span>${at.label}</span>
-      ${sel ? '<span class="tag-dd-check">\u2713</span>' : '<span class="tag-dd-edit-btn" data-edit-atid="'+at.id+'">\u270E</span>'}
-    </div>`;
+    return `<button class="sb-action-bank-btn ${sel?'selected':''}" data-atid="${at.id}" style="--btn-color:${TAG_COLOR_HEX[at.color]||'#94a3b8'}">${at.label}</button>`;
   }).join('');
 
-  const cdots = TAG_COLORS.map(c =>
-    `<span class="tag-dd-cdot ${c===newActionColor?'sel':''}" data-ac="${c}" style="background:${TAG_COLOR_HEX[c]}"></span>`
-  ).join('');
+  area.innerHTML = `<div class="sb-action-bank-grid">${bankHtml}</div>`;
 
-  area.innerHTML = `
-    <div class="tag-dd-wrap">
-      <div class="tag-dd-trigger" data-dd="${ddId}">
-        ${selected ? `<span class="tag-dd-dot" style="background:${TAG_COLOR_HEX[selected.color]||'#94a3b8'};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px"></span>` : ''}
-        ${triggerLabel}
-      </div>
-      <div class="tag-dd-panel ${isOpen?'open':''}" id="${ddId}">
-        ${optsHtml}
-        <div class="tag-dd-footer">
-          <div class="tag-dd-new-row">
-            <input type="text" class="tag-dd-new-input" id="${containerId}-new" placeholder="New action type...">
-            <div class="tag-dd-color-dots">${cdots}</div>
-            <button class="tag-dd-add-btn" data-act-container="${containerId}">+</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  area.querySelector('.tag-dd-trigger').addEventListener('click', () => {
-    openActionDropdownId = isOpen ? null : ddId;
-    renderActionDropdown(containerId);
-  });
-
-  area.querySelectorAll('.tag-dd-opt').forEach(opt => {
-    opt.addEventListener('click', e => {
-      if (e.target.closest('.tag-dd-edit-btn')) return;
-      selectedActionTypeId = opt.dataset.atid;
-      openActionDropdownId = null;
+  area.querySelectorAll('.sb-action-bank-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedActionTypeId = btn.dataset.atid;
       renderActionDropdown(containerId);
     });
   });
@@ -1446,7 +1409,7 @@ function buildSidebar(doc, parentDoc) {
   // "Refer to existing doctor" search — only in edit mode
   const referExistingHtml = isEdit ? `
     <div class="sb-section">
-      <div class="sb-label">Refer to existing doctor</div>
+      <div class="sb-label">Connect to other doctor</div>
       <div class="sb-search-wrap">
         <input type="text" class="sb-input" id="sb-refer-search" placeholder="Search by name..." style="font-size:13px" autocomplete="off">
         <div class="sb-search-results" id="sb-refer-results" style="display:none"></div>
@@ -1455,27 +1418,14 @@ function buildSidebar(doc, parentDoc) {
 
   sidebar.innerHTML = `
     <div class="sb-header">
-      <div class="sb-title">${title}</div>
+      <input type="text" class="sb-header-name" id="sb-name" value="${doc.name||''}" placeholder="Doctor Name">
+      <input type="text" class="sb-header-spec" id="sb-specialty" value="${doc.specialty||''}" placeholder="Specialty">
       <button class="sb-close" onclick="closeSidebar()">&times;</button>
     </div>
     <div class="sb-body">
       <div class="sb-section">
-        <div class="sb-label">Doctor Name</div>
-        <input type="text" class="sb-input" id="sb-name" value="${doc.name||''}" placeholder="Dr. Smith">
-      </div>
-      <div class="sb-section">
-        <div class="sb-label">Specialty</div>
-        <input type="text" class="sb-input" id="sb-specialty" value="${doc.specialty||''}" placeholder="Cardiology, Primary Care...">
-      </div>
-      <div class="sb-section" style="padding:8px 12px">
-        <label class="sb-toggle-row" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="sb-is-node" ${doc.isNode?'checked':''} style="width:16px;height:16px;accent-color:#8b5cf6">
-          <span style="font-size:13px;color:#475569">This is a <strong style="color:#7c3aed">Node</strong> (organization, source, person — not a doctor)</span>
-        </label>
-      </div>
-      <div class="sb-section">
         <div class="sb-label">Notes <span class="sb-label-hint">Phone, address, hours, point of contact</span></div>
-        <textarea class="sb-textarea" id="sb-notes">${doc.notes||''}</textarea>
+        <textarea class="sb-textarea sb-textarea-tall" id="sb-notes">${doc.notes||''}</textarea>
         <div class="phone-pills" id="sb-phone-pills"></div>
       </div>
       <div class="sb-section">
@@ -1487,8 +1437,7 @@ function buildSidebar(doc, parentDoc) {
           <button class="tag-dd-add-btn" onclick="addLink()">+</button>
         </div>
       </div>
-      <div class="sb-section">
-        <div class="sb-label">Tags</div>
+      <div class="sb-section sb-tags-compact">
         <div id="sb-tags-area"></div>
         <div class="sb-misc-field" id="sb-misc-area">
           <input type="text" class="sb-input" id="sb-misc-input" placeholder="Misc note..." style="font-size:12px">
@@ -1500,7 +1449,7 @@ function buildSidebar(doc, parentDoc) {
       <div class="sb-section">
         <div class="sb-label">Add Action</div>
         <div class="sb-action-box">
-          <div id="sb-action-type-area"></div>
+          <div class="sb-action-bank" id="sb-action-type-area"></div>
           <input type="text" class="sb-input" id="sb-action-detail" placeholder="Details (optional)" style="font-size:13px">
           <input type="date" class="sb-input" id="sb-action-date" value="${todayISO()}" style="font-size:12px">
           <div style="margin-top:4px">
@@ -1512,15 +1461,11 @@ function buildSidebar(doc, parentDoc) {
               <button class="tag-dd-add-btn" onclick="addActionLink()">+</button>
             </div>
           </div>
-          <div style="margin-top:4px">
-            <div class="sb-label" style="font-size:10px;margin-bottom:4px">Tags</div>
-            <div id="sb-action-tags-area"></div>
-          </div>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:2px">
             <input type="checkbox" id="sb-action-deactivate" style="width:14px;height:14px;accent-color:#f59e0b">
             <span style="font-size:11px;color:#92400e">De-activate cell <span style="color:#b0a090">(yellow, hidden from Scroll)</span></span>
           </label>
-          <button class="sb-action-add-btn" onclick="addAction()">+ Add Action</button>
+          <button class="sb-action-add-btn" onclick="addAction()">Save Action</button>
         </div>
       </div>
       ${actionLogHtml}
@@ -1561,11 +1506,17 @@ function buildSidebar(doc, parentDoc) {
             <button class="sb-close-out" onclick="closeOutDoctor()">Mark as Dealbreaker</button>
           </div>` : ''}
         ${isEdit && doc.closedOut ? '<button class="sb-reopen" onclick="reopenDoctor()">Reopen this doctor</button>' : ''}
+        <div style="padding:4px 0">
+          <label class="sb-toggle-row" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="sb-is-node" ${doc.isNode?'checked':''} style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px;color:#475569">This is a <strong style="color:#7c3aed">Node</strong> (organization, source, person — not a doctor)</span>
+          </label>
+        </div>
       </div>
     </div>
     <div class="sb-footer">
       ${isEdit ? `<button class="sb-delete" onclick="deleteDoctor()">Delete</button>
-      <button class="tb" onclick="closeSidebar();openSidebarNewReferral(${doc.id||sidebarDocId})" style="background:#eff6ff;border-color:#93c5fd;color:#1e40af;font-weight:600">+ Add Referral</button>` : ''}
+      <button class="tb" onclick="closeSidebar();openSidebarNewReferral(${doc.id||sidebarDocId})" style="background:#eff6ff;border-color:#93c5fd;color:#1e40af;font-weight:600">Referred to other doctor</button>` : ''}
       <div style="flex:1"></div>
       <button class="tb" onclick="closeSidebar()">Cancel</button>
       <button class="sb-save" onclick="saveSidebar()">${isEdit ? 'Save' : 'Add Doctor'}</button>
@@ -1573,8 +1524,7 @@ function buildSidebar(doc, parentDoc) {
   `;
 
   renderTagDropdown('sb-tags-area', sidebarTempTags);
-  renderTagDropdown('sb-action-tags-area', sidebarTempActionTags, null, true);
-  if (!selectedActionTypeId) selectedActionTypeId = allActionTypes()[0]?.id || null;
+  selectedActionTypeId = null;
   renderActionDropdown('sb-action-type-area');
   renderPhonePills();
   renderActionLinksList();
@@ -1600,7 +1550,16 @@ function buildSidebar(doc, parentDoc) {
   sidebar.querySelectorAll('.sb-action-entry-del').forEach(btn => {
     btn.addEventListener('click', () => {
       const d = doctors.find(d => d.id === sidebarDocId);
-      if (d && d.actions) { d.actions.splice(parseInt(btn.dataset.actionIdx), 1); save(); renderNode(d); renderEdges(); buildSidebar(d); }
+      if (d && d.actions) {
+        const sbBody = sidebar.querySelector('.sb-body');
+        const scrollPos = sbBody ? sbBody.scrollTop : 0;
+        d.actions.splice(parseInt(btn.dataset.actionIdx), 1);
+        save(); renderNode(d); renderEdges(); buildSidebar(d);
+        requestAnimationFrame(() => {
+          const newBody = sidebar.querySelector('.sb-body');
+          if (newBody) newBody.scrollTop = scrollPos;
+        });
+      }
     });
   });
 
