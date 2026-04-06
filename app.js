@@ -16,6 +16,7 @@ let customTags = [];
 let tagOverrides = {};
 let globalNotes = '';
 let viewMode = 'nucleus';
+let callListOrder = []; // user-defined order of doctor IDs in the To Call List
 
 let pan = { x: 0, y: 0 };
 let zoom = 1;
@@ -156,13 +157,23 @@ window.toggleScroll = function() {
 function renderScrollPanel() {
   const list = document.getElementById('scroll-list');
   if (!list) return;
-  const activeDocs = doctors
-    .filter(d => !d.closedOut && !d.isNode && !d.isDeactivated)
-    .sort((a, b) => {
-      const da = a.addedAt ? new Date(a.addedAt) : new Date(0);
-      const db = b.addedAt ? new Date(b.addedAt) : new Date(0);
-      return db - da;
-    });
+  let activeDocs = doctors
+    .filter(d => !d.closedOut && !d.isNode && !d.isDeactivated);
+
+  // Sort by user-defined order, then by addedAt for new entries
+  const orderMap = {};
+  callListOrder.forEach((id, i) => { orderMap[id] = i; });
+  activeDocs.sort((a, b) => {
+    const oa = orderMap[a.id] !== undefined ? orderMap[a.id] : 99999;
+    const ob = orderMap[b.id] !== undefined ? orderMap[b.id] : 99999;
+    if (oa !== ob) return oa - ob;
+    const da = a.addedAt ? new Date(a.addedAt) : new Date(0);
+    const db = b.addedAt ? new Date(b.addedAt) : new Date(0);
+    return db - da;
+  });
+
+  // Update callListOrder to match current active docs
+  callListOrder = activeDocs.map(d => d.id);
 
   if (activeDocs.length === 0) {
     list.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px">No active doctors yet</div>';
@@ -181,7 +192,8 @@ function renderScrollPanel() {
     const apptAction = (d.actions||[]).slice().reverse().find(a => a.appointmentDate);
     const apptHtml = apptAction ? `<div class="scroll-item-appt">Appointment Scheduled: ${new Date(apptAction.appointmentDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>` : '';
     const hasAppt = !!(apptAction);
-    return `<div class="scroll-item ${d.isPatient?'is-patient':''} ${hasAppt?'has-appointment':''}" data-scroll-id="${d.id}">
+    return `<div class="scroll-item ${d.isPatient?'is-patient':''} ${hasAppt?'has-appointment':''}" data-scroll-id="${d.id}" draggable="true">
+      <div class="scroll-item-drag" title="Drag to reorder">&#9776;</div>
       <div class="scroll-item-content">
         <div class="scroll-item-top">
           <div>
@@ -194,7 +206,7 @@ function renderScrollPanel() {
         ${apptHtml}
         ${tagsHtml ? `<div class="scroll-item-tags">${tagsHtml}</div>` : ''}
       </div>
-      <button class="scroll-item-edit" data-scroll-edit="${d.id}" title="Edit">✎</button>
+      <button class="scroll-item-edit" data-scroll-edit="${d.id}" title="View"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>`;
   }).join('');
 
@@ -204,6 +216,50 @@ function renderScrollPanel() {
       const id = parseInt(btn.dataset.scrollEdit);
       panToNode(id);
       openSidebarEdit(id);
+    });
+  });
+
+  // Drag-to-reorder
+  let dragSrcEl = null;
+  list.querySelectorAll('.scroll-item').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      dragSrcEl = item;
+      item.classList.add('dragging-scroll');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging-scroll');
+      dragSrcEl = null;
+      list.querySelectorAll('.scroll-item').forEach(el => el.classList.remove('drag-over-scroll'));
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (item !== dragSrcEl) {
+        list.querySelectorAll('.scroll-item').forEach(el => el.classList.remove('drag-over-scroll'));
+        item.classList.add('drag-over-scroll');
+      }
+    });
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('drag-over-scroll');
+    });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrcEl && dragSrcEl !== item) {
+        // Reorder in DOM
+        const allItems = [...list.querySelectorAll('.scroll-item')];
+        const fromIdx = allItems.indexOf(dragSrcEl);
+        const toIdx = allItems.indexOf(item);
+        if (fromIdx < toIdx) {
+          item.after(dragSrcEl);
+        } else {
+          item.before(dragSrcEl);
+        }
+        // Update callListOrder from new DOM order
+        callListOrder = [...list.querySelectorAll('.scroll-item')].map(el => parseInt(el.dataset.scrollId));
+        save();
+      }
+      item.classList.remove('drag-over-scroll');
     });
   });
 }
@@ -1706,7 +1762,7 @@ function buildSidebar(doc, parentDoc) {
   // "Refer to existing doctor" search — only in edit mode
   const referExistingHtml = isEdit ? `
     <div class="sb-section">
-      <div class="sb-label">Connect to other doctor on the diagram</div>
+      <div class="sb-label">Add Referral</div>
       <div class="sb-search-wrap">
         <input type="text" class="sb-input" id="sb-refer-search" placeholder="Search by name..." style="font-size:13px" autocomplete="off">
         <div class="sb-search-results" id="sb-refer-results" style="display:none"></div>
@@ -2543,7 +2599,7 @@ window.debugClear = function() { document.getElementById('debug-content').textCo
 
 // ===== PERSISTENCE =====
 function save() {
-  localStorage.setItem('doctor-network', JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes,viewMode}));
+  localStorage.setItem('doctor-network', JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes,viewMode,callListOrder}));
   showAutosave();
 }
 function load() {
@@ -2555,6 +2611,7 @@ function load() {
     customActionTypes=data.customActionTypes||[]; actionTypeOverrides=data.actionTypeOverrides||{};
     globalNotes=data.globalNotes||'';
     viewMode=data.viewMode||'nucleus';
+    callListOrder=data.callListOrder||[];
     // Migrate: add new fields to existing doctors
     const allTargeted = new Set((data.edges||[]).map(e => e.to));
     doctors.forEach(d => {
@@ -2604,6 +2661,7 @@ function importData(event) {
       customActionTypes=data.customActionTypes||[]; actionTypeOverrides=data.actionTypeOverrides||{};
       globalNotes=data.globalNotes||'';
       viewMode=data.viewMode||'nucleus';
+      callListOrder=data.callListOrder||[];
       doctors.forEach(d => {
         if (d.addedAt === undefined) d.addedAt = new Date().toISOString();
         if (d.isNode === undefined) d.isNode = false;
@@ -2636,6 +2694,7 @@ function handleFileDrop(event) {
       customActionTypes = data.customActionTypes || []; actionTypeOverrides = data.actionTypeOverrides || {};
       globalNotes = data.globalNotes || '';
       viewMode = data.viewMode || 'nucleus';
+      callListOrder = data.callListOrder || [];
       doctors.forEach(d => {
         if (d.addedAt === undefined) d.addedAt = new Date().toISOString();
         if (d.isNode === undefined) d.isNode = false;
