@@ -529,16 +529,54 @@ function layoutHierarchy() {
     });
   }
 
-  // Place all root subtrees on one horizontal line
-  let totalRootWidth = roots.reduce((sum, r, i) => {
-    return sum + subtreeWidth[r.id] + (i < roots.length - 1 ? TREE_GAP : 0);
-  }, 0);
+  // Calculate total depth of each root's subtree (for row height)
+  function treeMaxDepth(id, d) {
+    let max = d;
+    (childrenOf[id] || []).forEach(cid => { max = Math.max(max, treeMaxDepth(cid, d + 1)); });
+    return max;
+  }
+  function treeMaxHeight(rid) {
+    // Estimate pixel height: depth levels * (tallest card + padding)
+    const depth = treeMaxDepth(rid, 0);
+    return (depth + 1) * 250; // rough estimate per level
+  }
 
-  let rx = -totalRootWidth / 2;
+  // Sort roots: widest subtrees first so they anchor each row
+  roots.sort((a, b) => subtreeWidth[b.id] - subtreeWidth[a.id]);
+
+  // Place root subtrees in rows, wrapping when row gets too wide
+  const MAX_ROW_WIDTH = 3000;
+  let rows = [[]];
+  let rowWidths = [0];
+
   roots.forEach(r => {
     const tw = subtreeWidth[r.id];
-    placeSubtree(r.id, rx + tw / 2, 0);
-    rx += tw + TREE_GAP;
+    const lastRow = rows.length - 1;
+    if (rowWidths[lastRow] > 0 && rowWidths[lastRow] + TREE_GAP + tw > MAX_ROW_WIDTH) {
+      rows.push([]);
+      rowWidths.push(0);
+    }
+    const ri = rows.length - 1;
+    rows[ri].push(r);
+    rowWidths[ri] += (rowWidths[ri] > 0 ? TREE_GAP : 0) + tw;
+  });
+
+  let globalY = 0;
+  rows.forEach(row => {
+    const rowWidth = row.reduce((sum, r, i) => {
+      return sum + subtreeWidth[r.id] + (i > 0 ? TREE_GAP : 0);
+    }, 0);
+
+    let rx = -rowWidth / 2;
+    let rowMaxH = 0;
+    row.forEach(r => {
+      const tw = subtreeWidth[r.id];
+      placeSubtree(r.id, rx + tw / 2, globalY);
+      rx += tw + TREE_GAP;
+      rowMaxH = Math.max(rowMaxH, treeMaxHeight(r.id));
+    });
+
+    globalY += rowMaxH + 80; // gap between rows of root trees
   });
 }
 
