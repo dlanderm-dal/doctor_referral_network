@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doctor Referral Network — Data View</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+    min-height: 100vh;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .toolbar h1 {
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .toolbar-spacer { flex: 1; }
+  .toolbar a.back-link {
+    color: #4f46e5;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .toolbar a.back-link:hover { text-decoration: underline; }
+
+  .toolbar button {
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .toolbar button:hover { background: #4338ca; }
+
+  .search-box {
+    padding: 7px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 260px;
+    outline: none;
+    font-family: inherit;
+  }
+  .search-box:focus { border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+
+  /* Table container */
+  .table-wrap {
+    padding: 20px 24px;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-size: 13px;
+  }
+
+  thead th {
+    background: #f9fafb;
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    border-bottom: 2px solid #e5e7eb;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.1s;
+  }
+  tbody tr:hover { background: #f9fafb; }
+
+  tbody td {
+    padding: 8px 12px;
+    vertical-align: top;
+  }
+
+  /* Row tints */
+  tr.row-patient { background: #f0fdf4; }
+  tr.row-patient:hover { background: #dcfce7; }
+  tr.row-node { background: #faf5ff; }
+  tr.row-node:hover { background: #f3e8ff; }
+  tr.row-closed { background: #fef2f2; }
+  tr.row-closed:hover { background: #fee2e2; }
+
+  /* Child indent */
+  .name-cell { display: flex; align-items: center; gap: 4px; min-width: 180px; }
+  .indent { display: inline-block; flex-shrink: 0; }
+  .chevron {
+    width: 20px; height: 20px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 4px; flex-shrink: 0;
+    font-size: 12px; color: #6b7280; user-select: none;
+    transition: background 0.15s;
+  }
+  .chevron:hover { background: #e5e7eb; }
+  .chevron.expanded { transform: rotate(90deg); }
+  .chevron-placeholder { width: 20px; flex-shrink: 0; }
+
+  /* Editable cells */
+  .editable {
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 4px;
+    min-width: 60px;
+    display: inline-block;
+  }
+  .editable:hover { background: #f3f4f6; }
+  .editable:focus {
+    outline: none;
+    background: #fff;
+    box-shadow: 0 0 0 2px rgba(79,70,229,0.3);
+  }
+
+  /* Tag pills */
+  .tag-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 1px 2px;
+    white-space: nowrap;
+  }
+
+  /* Tag colors */
+  .tag-green  { background: #dcfce7; color: #166534; }
+  .tag-red    { background: #fee2e2; color: #991b1b; }
+  .tag-amber  { background: #fef3c7; color: #92400e; }
+  .tag-blue   { background: #dbeafe; color: #1e40af; }
+  .tag-purple { background: #f3e8ff; color: #6b21a8; }
+  .tag-teal   { background: #ccfbf1; color: #115e59; }
+  .tag-gray   { background: #f3f4f6; color: #374151; }
+  .tag-pink   { background: #fce7f3; color: #9d174d; }
+  .tag-indigo { background: #e0e7ff; color: #3730a3; }
+  .tag-lime   { background: #ecfccb; color: #3f6212; }
+  .tag-cyan   { background: #cffafe; color: #155e75; }
+  .tag-rose   { background: #ffe4e6; color: #9f1239; }
+
+  /* Expandable counts */
+  .expand-btn {
+    background: #f3f4f6;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #4b5563;
+    font-family: inherit;
+  }
+  .expand-btn:hover { background: #e5e7eb; }
+
+  .expand-panel {
+    display: none;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .expand-panel.open { display: block; }
+
+  .action-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+  }
+  .action-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .action-date { color: #9ca3af; font-size: 11px; }
+
+  .link-item a {
+    color: #4f46e5;
+    text-decoration: none;
+    font-size: 12px;
+  }
+  .link-item a:hover { text-decoration: underline; }
+
+  .type-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-weight: 500;
+    display: inline-block;
+  }
+  .type-doctor  { background: #dbeafe; color: #1e40af; }
+  .type-node    { background: #f3e8ff; color: #6b21a8; }
+  .type-patient { background: #dcfce7; color: #166534; }
+
+  .status-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-weight: 500;
+    display: inline-block;
+  }
+  .status-active  { background: #dcfce7; color: #166534; }
+  .status-closed  { background: #fee2e2; color: #991b1b; }
+  .status-patient { background: #e0e7ff; color: #3730a3; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+    font-size: 15px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #1f2937;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    z-index: 200;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a class="back-link" href="index.html">&larr; Back to Network</a>
+  <h1>Doctor Referral Network &mdash; Data View</h1>
+  <div class="toolbar-spacer"></div>
+  <input type="text" class="search-box" id="searchBox" placeholder="Search name, specialty, tags...">
+  <button id="exportBtn">Export JSON</button>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Specialty</th>
+        <th>Status</th>
+        <th>Tags</th>
+        <th>Actions</th>
+        <th>Links</th>
+        <th>Documents</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="empty-state" id="emptyState" style="display:none;">
+    <p>No data found in localStorage.</p>
+    <p style="font-size:13px;color:#9ca3af;margin-top:8px">Make sure you open this page from the same server as the network view (e.g., both on <strong>localhost:3000</strong>).<br>Opening the HTML file directly won't share data with the served version.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'doctor-network';
+
+const DEFAULT_TAGS = [
+  { id: 'insurance', label: 'Insurance', color: 'green', dualMode: true },
+  { id: 'new-patients', label: 'Accepts New Patients', color: 'blue', dualMode: true },
+  { id: 'reading-fee', label: 'Reading Fee', color: 'amber' },
+  { id: 'telehealth', label: 'Telehealth Available', color: 'purple' },
+];
+
+const DOT_COLORS = {
+  blue: '#3b82f6', green: '#22c55e', red: '#ef4444', amber: '#f59e0b',
+  purple: '#a855f7', gray: '#6b7280', pink: '#ec4899', teal: '#14b8a6',
+  indigo: '#6366f1', lime: '#84cc16', cyan: '#06b6d4', rose: '#f43f5e',
+};
+
+let data = null;
+let expandedRows = new Set();
+let expandedActions = new Set();
+let expandedLinks = new Set();
+let searchQuery = '';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      data = JSON.parse(raw);
+    } else {
+      data = null;
+    }
+  } catch (e) {
+    data = null;
+  }
+}
+
+function saveData() {
+  if (data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+}
+
+function allTags() {
+  const tags = [];
+  const overrides = (data && data.tagOverrides) || {};
+  for (const t of DEFAULT_TAGS) {
+    const merged = { ...t, ...(overrides[t.id] || {}) };
+    tags.push(merged);
+  }
+  if (data && data.customTags) {
+    for (const ct of data.customTags) {
+      const merged = { ...ct, ...(overrides[ct.id] || {}) };
+      tags.push(merged);
+    }
+  }
+  return tags;
+}
+
+function getTagById(id) {
+  // Handle dual-mode composite IDs like "insurance:yes" or "insurance:no"
+  if (id && id.includes(':')) {
+    const [baseId, mode] = id.split(':');
+    const baseTag = allTags().find(t => t.id === baseId);
+    if (baseTag && baseTag.dualMode) {
+      if (mode === 'yes') return { ...baseTag, label: baseTag.label + ' ✓', color: 'green' };
+      if (mode === 'no') return { ...baseTag, label: baseTag.label + ' ✗', color: 'red' };
+    }
+  }
+  return allTags().find(t => t.id === id);
+}
+
+function getTagLabelsForDoctor(doc) {
+  return (doc.tags || []).map(tid => {
+    const t = getTagById(tid);
+    return t ? t.label : tid;
+  });
+}
+
+function getType(doc) {
+  if (doc.isPatient) return 'Patient';
+  if (doc.isNode) return 'Node';
+  return 'Doctor';
+}
+
+function getStatus(doc) {
+  if (doc.isPatient) return 'Patient';
+  if (doc.closedOut) return 'Closed Out';
+  return 'Active';
+}
+
+function getRowClass(doc) {
+  if (doc.isPatient) return 'row-patient';
+  if (doc.isNode) return 'row-node';
+  if (doc.closedOut) return 'row-closed';
+  return '';
+}
+
+function getTypeBadgeClass(doc) {
+  if (doc.isPatient) return 'type-patient';
+  if (doc.isNode) return 'type-node';
+  return 'type-doctor';
+}
+
+function getStatusBadgeClass(doc) {
+  if (doc.isPatient) return 'status-patient';
+  if (doc.closedOut) return 'status-closed';
+  return 'status-active';
+}
+
+function matchesSearch(doc) {
+  if (!searchQuery) return true;
+  const q = searchQuery.toLowerCase();
+  const name = (doc.name || '').toLowerCase();
+  const spec = (doc.specialty || '').toLowerCase();
+  const notes = (doc.notes || '').toLowerCase();
+  const tagLabels = getTagLabelsForDoctor(doc).join(' ').toLowerCase();
+  return name.includes(q) || spec.includes(q) || notes.includes(q) || tagLabels.includes(q);
+}
+
+/* Build tree from edges */
+function buildTree() {
+  if (!data || !data.doctors) return [];
+  const doctors = data.doctors;
+  const edges = data.edges || [];
+  const byId = {};
+  for (const d of doctors) byId[d.id] = d;
+
+  // find children per parent
+  const childrenOf = {};
+  const hasParent = new Set();
+  for (const e of edges) {
+    if (!childrenOf[e.from]) childrenOf[e.from] = [];
+    childrenOf[e.from].push(e.to);
+    hasParent.add(e.to);
+  }
+
+  // root nodes: no incoming edge
+  const roots = doctors.filter(d => !hasParent.has(d.id));
+
+  // build flat list with depth info
+  const result = [];
+  const visited = new Set();
+
+  function walk(id, depth) {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const doc = byId[id];
+    if (!doc) return;
+    const children = (childrenOf[id] || []).filter(cid => byId[cid] && !visited.has(cid));
+    result.push({ doc, depth, hasChildren: children.length > 0 });
+    if (expandedRows.has(id)) {
+      for (const cid of children) {
+        walk(cid, depth + 1);
+      }
+    }
+  }
+
+  for (const r of roots) {
+    walk(r.id, 0);
+  }
+
+  // pick up any unvisited (shouldn't happen normally)
+  for (const d of doctors) {
+    if (!visited.has(d.id)) {
+      result.push({ doc: d, depth: 0, hasChildren: false });
+    }
+  }
+
+  return result;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  const emptyState = document.getElementById('emptyState');
+
+  if (!data || !data.doctors || data.doctors.length === 0) {
+    tbody.innerHTML = '';
+    emptyState.style.display = '';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  const tree = buildTree();
+  const filtered = tree.filter(item => matchesSearch(item.doc));
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#9ca3af;">No matching records.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  for (const item of filtered) {
+    const d = item.doc;
+    const rowClass = getRowClass(d);
+    const indentPx = item.depth * 24;
+
+    html += `<tr class="${rowClass}" data-id="${d.id}">`;
+
+    // Name
+    html += `<td><div class="name-cell">`;
+    if (indentPx > 0) html += `<span class="indent" style="width:${indentPx}px"></span>`;
+    if (item.hasChildren) {
+      const exp = expandedRows.has(d.id);
+      html += `<span class="chevron ${exp ? 'expanded' : ''}" data-toggle="${d.id}">&#9654;</span>`;
+    } else {
+      html += `<span class="chevron-placeholder"></span>`;
+    }
+    html += `<span class="editable" contenteditable="true" data-field="name" data-id="${d.id}">${escapeHtml(d.name)}</span>`;
+    html += `</div></td>`;
+
+    // Type
+    html += `<td><span class="type-badge ${getTypeBadgeClass(d)}">${getType(d)}</span></td>`;
+
+    // Specialty
+    html += `<td><span class="editable" contenteditable="true" data-field="specialty" data-id="${d.id}">${escapeHtml(d.specialty || '')}</span></td>`;
+
+    // Status
+    html += `<td><span class="status-badge ${getStatusBadgeClass(d)}">${getStatus(d)}</span></td>`;
+
+    // Tags
+    html += `<td>`;
+    for (const tid of (d.tags || [])) {
+      const tag = getTagById(tid);
+      if (tag) {
+        html += `<span class="tag-pill tag-${tag.color || 'gray'}">${escapeHtml(tag.label)}</span>`;
+      }
+    }
+    html += `</td>`;
+
+    // Actions
+    const actions = d.actions || [];
+    html += `<td>`;
+    if (actions.length > 0) {
+      const aOpen = expandedActions.has(d.id);
+      html += `<button class="expand-btn" data-action-toggle="${d.id}">${actions.length} action${actions.length !== 1 ? 's' : ''} ${aOpen ? '&#9660;' : '&#9654;'}</button>`;
+      html += `<div class="expand-panel ${aOpen ? 'open' : ''}" data-action-panel="${d.id}">`;
+      for (const a of actions) {
+        const dotColor = DOT_COLORS[a.dotColor] || DOT_COLORS.blue;
+        html += `<div class="action-item"><span class="action-dot" style="background:${dotColor}"></span><span>${escapeHtml(a.text)}</span><span class="action-date">${escapeHtml(a.date || '')}</span></div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<span style="color:#d1d5db">0</span>`;
+    }
+    html += `</td>`;
+
+    // Links
+    const links = d.links || [];
+    html += `<td>`;
+    if (links.length > 0) {
+      const lOpen = expandedLinks.has(d.id);
+      html += `<button class="expand-btn" data-link-toggle="${d.id}">${links.length} link${links.length !== 1 ? 's' : ''} ${lOpen ? '&#9660;' : '&#9654;'}</button>`;
+      html += `<div class="expand-panel ${lOpen ? 'open' : ''}" data-link-panel="${d.id}">`;
+      for (const l of links) {
+        html += `<div class="link-item"><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.title || l.url)}</a></div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<span style="color:#d1d5db">0</span>`;
+    }
+    html += `</td>`;
+
+    // Documents
+    const docs = d.documents || [];
+    html += `<td><span style="color:${docs.length ? '#1f2937' : '#d1d5db'}">${docs.length}</span></td>`;
+
+    html += `</tr>`;
+  }
+
+  tbody.innerHTML = html;
+  attachRowListeners();
+}
+
+function attachRowListeners() {
+  // Chevron expand/collapse
+  document.querySelectorAll('[data-toggle]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = Number(el.dataset.toggle);
+      if (expandedRows.has(id)) expandedRows.delete(id);
+      else expandedRows.add(id);
+      renderTable();
+    });
+  });
+
+  // Action toggles
+  document.querySelectorAll('[data-action-toggle]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = Number(el.dataset.actionToggle);
+      if (expandedActions.has(id)) expandedActions.delete(id);
+      else expandedActions.add(id);
+      renderTable();
+    });
+  });
+
+  // Link toggles
+  document.querySelectorAll('[data-link-toggle]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = Number(el.dataset.linkToggle);
+      if (expandedLinks.has(id)) expandedLinks.delete(id);
+      else expandedLinks.add(id);
+      renderTable();
+    });
+  });
+
+  // Inline editing
+  document.querySelectorAll('.editable').forEach(el => {
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        el.blur();
+      }
+      if (e.key === 'Escape') {
+        // revert
+        const id = Number(el.dataset.id);
+        const field = el.dataset.field;
+        const doc = data.doctors.find(d => d.id === id);
+        if (doc) el.textContent = doc[field] || '';
+        el.blur();
+      }
+    });
+
+    el.addEventListener('blur', () => {
+      const id = Number(el.dataset.id);
+      const field = el.dataset.field;
+      const newVal = el.textContent.trim();
+      const doc = data.doctors.find(d => d.id === id);
+      if (doc && doc[field] !== newVal) {
+        doc[field] = newVal;
+        saveData();
+        showToast('Saved');
+      }
+    });
+  });
+}
+
+// Search
+document.getElementById('searchBox').addEventListener('input', e => {
+  searchQuery = e.target.value.trim();
+  renderTable();
+});
+
+// Export
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (!data) return;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'doctor-network-export.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported');
+});
+
+// Cross-tab sync
+window.addEventListener('storage', e => {
+  if (e.key === STORAGE_KEY) {
+    loadData();
+    renderTable();
+    showToast('Synced from other tab');
+  }
+});
+
+// Toast
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// Init
+loadData();
+// Expand all root nodes by default
+if (data && data.doctors) {
+  const edges = data.edges || [];
+  const hasParent = new Set(edges.map(e => e.to));
+  for (const d of data.doctors) {
+    if (!hasParent.has(d.id)) {
+      expandedRows.add(d.id);
+    }
+  }
+}
+renderTable();
+</script>
+</body>
+</html>

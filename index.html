@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doctor Referral Network</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3-dispatch@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-quadtree@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-timer@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-force@3"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body>
+
+<div id="toolbar">
+  <button class="tb" id="notes-btn" onclick="toggleNotes()" title="Scratchpad">Notes</button>
+  <button class="tb" id="scroll-btn" onclick="toggleScroll()" title="Active Doctors List">Scroll</button>
+  <h1>Doctor Referral Network</h1>
+  <span id="autosave-indicator">Saved</span>
+  <div class="toolbar-spacer"></div>
+  <div class="tb-dropdown-wrap">
+    <button class="tb" onclick="this.parentElement.classList.toggle('open')">View &#9662;</button>
+    <div class="tb-dropdown-menu">
+      <button class="tb-dropdown-item" onclick="fitView(); this.closest('.tb-dropdown-wrap').classList.remove('open')">Fit View</button>
+      <label class="tb-dropdown-item" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="hide-inactive" onchange="toggleHideInactive()" style="width:14px;height:14px;accent-color:#ef4444">
+        Hide Inactive
+      </label>
+    </div>
+  </div>
+  <div class="tb-dropdown-wrap">
+    <button class="tb" onclick="this.parentElement.classList.toggle('open')">Options &#9662;</button>
+    <div class="tb-dropdown-menu">
+      <button class="tb-dropdown-item" onclick="exportData(); this.closest('.tb-dropdown-wrap').classList.remove('open')">Save</button>
+      <button class="tb-dropdown-item" onclick="document.getElementById('import-file').click(); this.closest('.tb-dropdown-wrap').classList.remove('open')">Load</button>
+    </div>
+  </div>
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+  <button class="tb refresh" onclick="refreshLayout()" title="Re-arrange all nodes">↻ Refresh Layout</button>
+  <button class="tb secondary" onclick="openSidebarAddNode()">+ Add Node</button>
+  <button class="tb primary" onclick="openSidebarNew()">+ Add Doctor</button>
+</div>
+
+<div id="notes-panel">
+  <div class="np-header">
+    <div class="np-title">Scratchpad</div>
+    <button class="np-close" onclick="toggleNotes()">&times;</button>
+  </div>
+  <textarea id="notes-textarea" placeholder="General notes, reminders, to-dos..."></textarea>
+</div>
+
+<div id="scroll-panel">
+  <div class="np-header">
+    <div class="np-title">Active Doctors</div>
+    <button class="np-close" onclick="toggleScroll()">&times;</button>
+  </div>
+  <div id="scroll-list"></div>
+</div>
+
+<div id="canvas">
+  <div id="world">
+    <svg id="lines-svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <path d="M 0 0 L 8 3 L 0 6 Z" />
+        </marker>
+        <marker id="arrowhead-cross" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <path d="M 0 0 L 8 3 L 0 6 Z" fill="#f59e0b" />
+        </marker>
+      </defs>
+    </svg>
+  </div>
+</div>
+
+<div id="empty-state">
+  <div id="drop-zone" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault(); this.classList.remove('drag-over'); handleFileDrop(event)">
+    <div class="drop-icon">&#128203;</div>
+    <h2>Load a network file to get started</h2>
+    <p>Drag and drop your <strong>doctor-network.json</strong> file here</p>
+    <button class="drop-browse" onclick="document.getElementById('import-file').click()">or click to browse</button>
+    <div class="drop-divider">or</div>
+    <button class="tb primary" onclick="openSidebarNew()">+ Add Doctor</button>
+  </div>
+</div>
+
+<div id="sidebar"></div>
+
+<div id="zoom-controls">
+  <button class="zm" onclick="zoomBy(0.8)">-</button>
+  <span id="zoom-label">100%</span>
+  <button class="zm" onclick="zoomBy(1.25)">+</button>
+</div>
+
+<div id="debug-panel">
+  <button id="dataview-toggle" onclick="toggleDataView()">Data View</button>
+  <button id="debug-toggle" onclick="toggleDebug()">Debug</button>
+  <div id="debug-output">
+    <div class="debug-actions">
+      <button class="debug-btn" onclick="debugDumpState()">Dump State</button>
+      <button class="debug-btn" onclick="debugDumpDOM()">Dump DOM</button>
+      <button class="debug-btn" onclick="debugCopyAll()">Copy All</button>
+      <button class="debug-btn" onclick="debugClear()">Clear</button>
+    </div>
+    <div id="debug-content"></div>
+  </div>
+</div>
+
+<div id="data-view-panel">
+  <div class="dv-header">
+    <div class="np-title">Data View</div>
+    <input type="text" class="sb-input dv-search" id="dv-search" placeholder="Search..." oninput="renderDataView()" style="flex:1;max-width:240px;font-size:12px;padding:6px 10px">
+    <button class="np-close" onclick="toggleDataView()">&times;</button>
+  </div>
+  <div id="dv-table-wrap">
+    <table id="dv-table">
+      <thead>
+        <tr>
+          <th style="min-width:180px">Name</th>
+          <th style="width:70px">Type</th>
+          <th style="min-width:120px">Specialty</th>
+          <th style="width:80px">Status</th>
+          <th style="min-width:140px">Tags</th>
+          <th style="width:60px">Actions</th>
+          <th style="width:60px">Links</th>
+          <th style="width:50px">Docs</th>
+        </tr>
+      </thead>
+      <tbody id="dv-tbody"></tbody>
+    </table>
+    <div id="dv-empty" style="display:none;text-align:center;padding:30px;color:#94a3b8">No data</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

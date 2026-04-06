@@ -1,0 +1,865 @@
+/* ============================================
+   COMMENT SYSTEM — Standalone CSS Component
+   All classes use lh- prefix to avoid collisions.
+   Uses !important on injected styles to override host page.
+   ============================================ */
+
+/* ============================================
+   CSS CUSTOM PROPERTIES (theming)
+   ============================================ */
+
+:root {
+  --cs-accent: #1a73e8;
+  --cs-accent-hover: #1557b0;
+  --cs-green: #1e8e3e;
+  --cs-red: #d93025;
+  --cs-orange: #e8710a;
+  --cs-yellow: #fbbc04;
+  --cs-text: #202124;
+  --cs-text-secondary: #5f6368;
+  --cs-text-dim: #9aa0a6;
+  --cs-border: #dadce0;
+  --cs-bg: #ffffff;
+  --cs-bg-alt: #f8f9fa;
+  --cs-sidebar-width: 380px;
+  --cs-navbar-height: 56px;
+}
+
+/* ============================================
+   NAVBAR
+   ============================================ */
+
+.lh-navbar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: var(--cs-navbar-height) !important;
+  background: var(--cs-bg) !important;
+  border-bottom: 1px solid var(--cs-border) !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 1rem !important;
+  z-index: 999998 !important;
+  font-family: 'Google Sans', Arial, sans-serif !important;
+  box-sizing: border-box !important;
+  gap: 0.5rem !important;
+  justify-content: flex-end !important;
+}
+
+.lh-navbar * { box-sizing: border-box !important; }
+
+/* Nav export button */
+.lh-nav-export {
+  font-family: Arial, sans-serif !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  background: var(--cs-accent) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.4rem 0.8rem !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+}
+
+.lh-nav-export:hover { background: var(--cs-accent-hover) !important; }
+
+/* Body offset for navbar */
+body {
+  padding-top: var(--cs-navbar-height) !important;
+}
+
+/* ============================================
+   NEW CONTENT HIGHLIGHTING
+   Applied by Claude Code when processing comments.
+   ============================================ */
+
+.lh-new-content {
+  background: #d2e3fc !important;
+  border-radius: 3px !important;
+  padding: 1px 2px !important;
+  transition: background 0.3s !important;
+}
+
+/* ============================================
+   COMMENTS DROPDOWN
+   ============================================ */
+
+.lh-nav-dropdown-wrap {
+  position: relative !important;
+}
+
+.lh-nav-dropdown-btn {
+  font-family: Arial, sans-serif !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  background: var(--cs-bg) !important;
+  color: var(--cs-text-secondary) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 6px !important;
+  padding: 0.4rem 0.8rem !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+}
+
+.lh-nav-dropdown-btn:hover { background: #f1f3f5 !important; }
+
+.lh-nav-dropdown {
+  display: none !important;
+  position: absolute !important;
+  top: calc(100% + 4px) !important;
+  right: 0 !important;
+  background: var(--cs-bg) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+  z-index: 999999 !important;
+  min-width: 200px !important;
+  overflow: hidden !important;
+}
+
+.lh-nav-dropdown.lh-drop-visible { display: block !important; }
+
+.lh-nav-drop-item {
+  display: block !important;
+  width: 100% !important;
+  text-align: left !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 0.82rem !important;
+  color: var(--cs-text) !important;
+  background: var(--cs-bg) !important;
+  border: none !important;
+  padding: 0.6rem 1rem !important;
+  cursor: pointer !important;
+}
+
+.lh-nav-drop-item:hover { background: #f1f3f5 !important; }
+
+.lh-nav-drop-divider {
+  height: 1px !important;
+  background: #e8eaed !important;
+  margin: 2px 0 !important;
+}
+
+.lh-nav-drop-stats {
+  padding: 0.5rem 1rem !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 0.72rem !important;
+  color: var(--cs-text-secondary) !important;
+  white-space: nowrap !important;
+}
+
+.lh-stat-dot {
+  display: inline-block !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  vertical-align: middle !important;
+}
+
+.lh-nav-drop-item.lh-comment-mode-active {
+  background: #fef7e0 !important;
+  color: #b06000 !important;
+}
+
+/* ============================================
+   COMMENT MODE
+   ============================================ */
+
+body.lh-comment-mode a:not(.lh-nav-brand):not(.lh-nav-link) {
+  pointer-events: none !important;
+  cursor: text !important;
+}
+
+body.lh-comment-mode * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+body.lh-comment-mode::before {
+  content: '' !important;
+  position: fixed !important;
+  top: 56px !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 3px !important;
+  background: var(--cs-yellow) !important;
+  z-index: 999999 !important;
+}
+
+/* ============================================
+   QUICK FIX SIDEBAR (minimal)
+   ============================================ */
+
+.lh-sidebar {
+  position: fixed !important;
+  right: 0 !important;
+  top: var(--cs-navbar-height) !important;
+  width: var(--cs-sidebar-width) !important;
+  height: calc(100vh - var(--cs-navbar-height)) !important;
+  background: var(--cs-bg-alt) !important;
+  border-left: 1px solid var(--cs-border) !important;
+  z-index: 999997 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  transition: width 0.25s ease, border 0.25s ease !important;
+  font-family: Arial, sans-serif !important;
+  color: var(--cs-text) !important;
+  box-sizing: border-box !important;
+}
+
+.lh-sidebar.lh-collapsed {
+  width: 0 !important;
+  border-left: none !important;
+  overflow: hidden !important;
+}
+
+.lh-sidebar * { box-sizing: border-box !important; }
+
+.lh-toggle {
+  position: fixed !important;
+  right: var(--cs-sidebar-width) !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 24px !important;
+  height: 56px !important;
+  background: var(--cs-bg-alt) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-right: none !important;
+  border-radius: 8px 0 0 8px !important;
+  color: var(--cs-text-secondary) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.9rem !important;
+  z-index: 999997 !important;
+  transition: right 0.25s ease !important;
+  padding: 0 !important;
+}
+
+.lh-toggle:hover { color: var(--cs-accent) !important; background: #e8f0fe !important; }
+.lh-toggle.lh-toggle-shifted { right: 0 !important; }
+
+/* Sidebar header */
+.lh-sidebar-header {
+  padding: 1rem 1.25rem 0.75rem !important;
+  border-bottom: 1px solid var(--cs-border) !important;
+  flex-shrink: 0 !important;
+  background: var(--cs-bg) !important;
+}
+
+.lh-sidebar-title {
+  font-size: 0.95rem !important;
+  font-weight: 600 !important;
+  color: var(--cs-text) !important;
+  margin: 0 0 0.15rem 0 !important;
+}
+
+.lh-sidebar-subtitle {
+  font-size: 0.78rem !important;
+  color: var(--cs-text-dim) !important;
+  margin: 0 !important;
+}
+
+/* Sidebar form */
+.lh-sidebar-form {
+  padding: 0.85rem 1.25rem !important;
+  flex-shrink: 0 !important;
+  border-bottom: 1px solid #e8eaed !important;
+  background: var(--cs-bg) !important;
+}
+
+.lh-form-group { margin-bottom: 0.7rem !important; }
+
+.lh-form-label {
+  display: block !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  color: var(--cs-text-secondary) !important;
+  margin-bottom: 0.3rem !important;
+}
+
+.lh-captured-text {
+  background: var(--cs-bg) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 6px !important;
+  padding: 0.5rem 0.65rem !important;
+  color: var(--cs-text) !important;
+  font-size: 0.85rem !important;
+  line-height: 1.5 !important;
+  max-height: 100px !important;
+  overflow-y: auto !important;
+  min-height: 36px !important;
+  word-wrap: break-word !important;
+  transition: border-color 0.3s !important;
+}
+
+.lh-captured-text.lh-empty {
+  color: var(--cs-text-dim) !important;
+  font-style: italic !important;
+}
+
+.lh-textarea {
+  width: 100% !important;
+  background: var(--cs-bg) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 6px !important;
+  padding: 0.5rem 0.65rem !important;
+  color: var(--cs-text) !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 0.85rem !important;
+  line-height: 1.5 !important;
+  resize: vertical !important;
+  min-height: 60px !important;
+  max-height: 130px !important;
+}
+
+.lh-textarea:focus { outline: none !important; border-color: var(--cs-accent) !important; }
+.lh-textarea::placeholder { color: var(--cs-text-dim) !important; }
+
+/* Buttons */
+.lh-btn {
+  font-family: Arial, sans-serif !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.45rem 0.9rem !important;
+  cursor: pointer !important;
+  transition: background 0.15s !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.3rem !important;
+}
+
+.lh-btn-quickfix {
+  background: var(--cs-green) !important;
+  color: #fff !important;
+  width: 100% !important;
+}
+.lh-btn-quickfix:hover { background: #167d34 !important; }
+
+.lh-badge {
+  background: #fff !important;
+  color: var(--cs-accent) !important;
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  border-radius: 10px !important;
+  padding: 1px 6px !important;
+}
+
+.lh-feedback {
+  font-size: 0.78rem !important;
+  padding: 0.2rem 0 !important;
+  min-height: 1.2em !important;
+  color: var(--cs-green) !important;
+  text-align: center !important;
+}
+
+.lh-feedback.lh-error { color: var(--cs-red) !important; }
+
+/* ============================================
+   FLOATING SELECTION BAR (Quick Fix / Comment)
+   ============================================ */
+
+.lh-float-bar {
+  position: absolute !important;
+  z-index: 9999999 !important;
+  display: flex !important;
+  gap: 2px !important;
+  background: var(--cs-bg) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+  overflow: hidden !important;
+  animation: lhPopIn 0.12s ease !important;
+}
+
+.lh-float-btn {
+  font-family: Arial, sans-serif !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  padding: 8px 16px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: background 0.1s !important;
+}
+
+.lh-float-qf {
+  background: var(--cs-green) !important;
+  color: #fff !important;
+}
+.lh-float-qf:hover { background: #167d34 !important; }
+
+.lh-float-cm {
+  background: var(--cs-bg) !important;
+  color: var(--cs-accent) !important;
+}
+.lh-float-cm:hover { background: #e8f0fe !important; }
+
+@keyframes lhPopIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ============================================
+   INLINE COMMENT POPUP
+   ============================================ */
+
+.lh-comment-popup {
+  position: absolute !important;
+  z-index: 9999998 !important;
+  width: 300px !important;
+  background: var(--cs-bg) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15) !important;
+  padding: 0.85rem !important;
+  font-family: Arial, sans-serif !important;
+  animation: lhPopIn 0.12s ease !important;
+}
+
+.lh-comment-popup-quote {
+  font-size: 0.78rem !important;
+  color: var(--cs-text-secondary) !important;
+  font-style: italic !important;
+  margin-bottom: 0.5rem !important;
+  padding: 0.4rem 0.6rem !important;
+  background: var(--cs-bg-alt) !important;
+  border-radius: 4px !important;
+  border-left: 3px solid var(--cs-border) !important;
+  word-break: break-word !important;
+}
+
+.lh-comment-popup-input {
+  width: 100% !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 6px !important;
+  padding: 0.5rem !important;
+  font-size: 0.85rem !important;
+  font-family: Arial, sans-serif !important;
+  color: var(--cs-text) !important;
+  resize: vertical !important;
+  min-height: 60px !important;
+  max-height: 120px !important;
+}
+
+.lh-comment-popup-input:focus {
+  outline: none !important;
+  border-color: var(--cs-accent) !important;
+}
+
+.lh-comment-popup-input::placeholder { color: var(--cs-text-dim) !important; }
+
+.lh-comment-popup-actions {
+  display: flex !important;
+  gap: 0.4rem !important;
+  margin-top: 0.5rem !important;
+  justify-content: flex-end !important;
+}
+
+.lh-comment-popup-save {
+  background: var(--cs-accent) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.35rem 0.9rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  font-family: Arial, sans-serif !important;
+}
+
+.lh-comment-popup-save:hover { background: var(--cs-accent-hover) !important; }
+
+.lh-comment-popup-cancel {
+  background: var(--cs-bg) !important;
+  color: var(--cs-text-secondary) !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 6px !important;
+  padding: 0.35rem 0.9rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  font-family: Arial, sans-serif !important;
+}
+
+.lh-comment-popup-cancel:hover { background: #f1f3f5 !important; }
+
+/* ============================================
+   IMAGE DROP ZONE (in comment popup)
+   ============================================ */
+
+.lh-img-dropzone {
+  border: 2px dashed var(--cs-border) !important;
+  border-radius: 6px !important;
+  padding: 0.5rem !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  margin-top: 0.4rem !important;
+  transition: border-color 0.15s, background 0.15s !important;
+}
+
+.lh-img-dropzone:hover, .lh-img-dropzone.lh-img-dragover {
+  border-color: var(--cs-accent) !important;
+  background: #e8f0fe !important;
+}
+
+.lh-img-dropzone-text {
+  font-size: 0.75rem !important;
+  color: var(--cs-text-dim) !important;
+  font-family: Arial, sans-serif !important;
+}
+
+.lh-img-preview {
+  max-width: 100% !important;
+  max-height: 120px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--cs-border) !important;
+  margin-top: 0.4rem !important;
+  cursor: pointer !important;
+}
+
+.lh-img-remove {
+  font-size: 0.72rem !important;
+  color: var(--cs-red) !important;
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  margin-top: 0.2rem !important;
+  font-family: Arial, sans-serif !important;
+  padding: 0 !important;
+}
+
+.lh-img-remove:hover { text-decoration: underline !important; }
+
+/* Image in comment detail popup */
+.lh-comment-detail-img {
+  max-width: 100% !important;
+  max-height: 150px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--cs-border) !important;
+  margin: 0.3rem 0 !important;
+  cursor: pointer !important;
+}
+
+/* Image lightbox overlay */
+.lh-lightbox-overlay {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  background: rgba(0,0,0,0.8) !important;
+  z-index: 100000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+}
+.lh-lightbox-img {
+  max-width: 90vw !important;
+  max-height: 90vh !important;
+  border-radius: 4px !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4) !important;
+  cursor: default !important;
+}
+.lh-lightbox-close {
+  position: fixed !important;
+  top: 16px !important; right: 24px !important;
+  background: none !important;
+  border: none !important;
+  color: #fff !important;
+  font-size: 2rem !important;
+  cursor: pointer !important;
+  line-height: 1 !important;
+  z-index: 100001 !important;
+}
+.lh-lightbox-close:hover { color: #ff6b6b !important; }
+
+/* Reply image styles */
+.lh-reply-img-zone {
+  margin-top: 0.3rem !important;
+  font-size: 0.72rem !important;
+  color: var(--cs-accent, #1a73e8) !important;
+  cursor: pointer !important;
+  font-family: Arial, sans-serif !important;
+}
+.lh-reply-img-zone:hover { text-decoration: underline !important; }
+.lh-reply-attach-btn {
+  display: block !important;
+  width: 100% !important;
+  padding: 0.3rem 0.5rem !important;
+  font-size: 0.72rem !important;
+  font-family: Arial, sans-serif !important;
+  font-weight: 600 !important;
+  color: #5f6368 !important;
+  background: #f1f3f4 !important;
+  border: 1px solid var(--cs-border, #dadce0) !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  text-align: center !important;
+}
+.lh-reply-attach-btn:hover { background: #e8eaed !important; color: #202124 !important; }
+.lh-reply-img-row {
+  margin-top: 0.4rem !important;
+}
+.lh-reply-preview-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  margin-top: 0.4rem !important;
+  padding: 0.3rem 0.5rem !important;
+  background: #f1f3f4 !important;
+  border-radius: 4px !important;
+}
+.lh-reply-img-preview {
+  width: 36px !important;
+  height: 36px !important;
+  object-fit: cover !important;
+  border-radius: 3px !important;
+  border: 1px solid var(--cs-border, #dadce0) !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+}
+.lh-reply-img-name {
+  font-size: 0.72rem !important;
+  color: #5f6368 !important;
+  font-family: Arial, sans-serif !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.lh-reply-img-remove {
+  font-size: 0.68rem !important;
+  color: var(--cs-red) !important;
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  font-family: Arial, sans-serif !important;
+  white-space: nowrap !important;
+}
+.lh-reply-img-remove:hover { text-decoration: underline !important; }
+.lh-thread-reply-img-wrap {
+  margin: 0.3rem 0 !important;
+}
+.lh-thread-reply-img {
+  max-width: 100% !important;
+  max-height: 100px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--cs-border, #dadce0) !important;
+  cursor: pointer !important;
+  display: block !important;
+}
+
+/* ============================================
+   COMMENT DETAIL POPUP
+   ============================================ */
+
+.lh-comment-detail-note {
+  font-size: 0.85rem !important;
+  color: var(--cs-text) !important;
+  margin-bottom: 0.3rem !important;
+  line-height: 1.5 !important;
+}
+
+.lh-comment-detail-time {
+  font-size: 0.7rem !important;
+  color: var(--cs-text-dim) !important;
+  margin-bottom: 0.4rem !important;
+}
+
+/* ============================================
+   COMMENT MARKERS (yellow dots in margin)
+   ============================================ */
+
+.lh-comment-marker {
+  position: absolute;
+  right: 12px;
+  z-index: 999990 !important;
+  cursor: pointer !important;
+  transform: translateY(-50%);
+}
+
+.lh-marker-dot {
+  width: 14px !important;
+  height: 14px !important;
+  background: var(--cs-yellow) !important;
+  border: 2px solid #f9a825 !important;
+  border-radius: 50% !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+}
+
+.lh-comment-marker:hover .lh-marker-dot {
+  transform: scale(1.3) !important;
+  box-shadow: 0 2px 8px rgba(251,188,4,0.4) !important;
+}
+
+.lh-marker-dot.lh-marker-has-replies {
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 0.6rem !important;
+  font-weight: 700 !important;
+  font-family: Arial, sans-serif !important;
+  color: #795500 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Implemented: green dot with checkmark */
+.lh-marker-dot.lh-marker-implemented {
+  background: var(--cs-green) !important;
+  border-color: #137333 !important;
+  color: #fff !important;
+  font-size: 0.65rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* ============================================
+   COMMENT THREADS
+   ============================================ */
+
+.lh-thread {
+  margin: 0.4rem 0 !important;
+  padding-left: 0.5rem !important;
+  border-left: 2px solid #e8eaed !important;
+}
+
+.lh-thread-reply {
+  padding: 0.3rem 0 !important;
+  font-size: 0.8rem !important;
+}
+
+.lh-thread-reply-text { color: var(--cs-text) !important; }
+.lh-thread-reply-time { color: var(--cs-text-dim) !important; font-size: 0.68rem !important; margin-left: 0.3rem !important; }
+
+.lh-thread-reply-form {
+  display: flex !important;
+  gap: 0.3rem !important;
+  margin-top: 0.4rem !important;
+}
+
+.lh-thread-reply-input {
+  flex: 1 !important;
+  border: 1px solid var(--cs-border) !important;
+  border-radius: 4px !important;
+  padding: 0.3rem 0.5rem !important;
+  font-size: 0.8rem !important;
+  font-family: Arial, sans-serif !important;
+  color: var(--cs-text) !important;
+}
+
+.lh-thread-reply-input:focus { outline: none !important; border-color: var(--cs-accent) !important; }
+.lh-thread-reply-input::placeholder { color: var(--cs-text-dim) !important; }
+
+/* ============================================
+   RESOLVED COMMENTS OVERLAY
+   ============================================ */
+
+.lh-resolved-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0,0,0,0.4) !important;
+  z-index: 9999998 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.lh-resolved-panel {
+  background: var(--cs-bg) !important;
+  border-radius: 12px !important;
+  padding: 1.5rem !important;
+  max-width: 500px !important;
+  width: 90% !important;
+  max-height: 70vh !important;
+  overflow-y: auto !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2) !important;
+}
+
+.lh-resolved-panel h3 {
+  font-family: Arial, sans-serif !important;
+  font-size: 1rem !important;
+  margin-bottom: 0.75rem !important;
+  color: var(--cs-text) !important;
+}
+
+.lh-resolved-item {
+  padding: 0.6rem 0 !important;
+  border-bottom: 1px solid #e8eaed !important;
+}
+
+.lh-resolved-item:last-child { border-bottom: none !important; }
+
+.lh-resolved-quote {
+  font-size: 0.8rem !important;
+  color: var(--cs-text-secondary) !important;
+  font-style: italic !important;
+  margin-bottom: 0.2rem !important;
+}
+
+.lh-resolved-note {
+  font-size: 0.85rem !important;
+  color: var(--cs-text) !important;
+  margin-bottom: 0.2rem !important;
+}
+
+.lh-resolved-reply {
+  font-size: 0.78rem !important;
+  color: var(--cs-text-secondary) !important;
+  padding-left: 0.5rem !important;
+  border-left: 2px solid #e8eaed !important;
+  margin: 0.2rem 0 !important;
+}
+
+.lh-resolved-close {
+  display: block !important;
+  margin: 1rem auto 0 !important;
+  background: var(--cs-accent) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.5rem 1.5rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  font-family: Arial, sans-serif !important;
+}
+
+.lh-resolved-close:hover { background: var(--cs-accent-hover) !important; }
+
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+
+.lh-toast {
+  position: fixed !important;
+  bottom: 1.5rem !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: #323232 !important;
+  color: #fff !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 0.85rem !important;
+  padding: 0.65rem 1.5rem !important;
+  border-radius: 8px !important;
+  z-index: 9999999 !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2) !important;
+}
