@@ -441,7 +441,7 @@ function layoutAll() {
 }
 
 // Refresh layout — randomizes starting positions then re-runs simulation
-// ===== HIERARCHY LAYOUT (tidy tree + gap + stagger) =====
+// ===== HIERARCHY LAYOUT =====
 function layoutHierarchy() {
   const hideInactive = document.getElementById('hide-inactive')?.checked || false;
   const activeDocs = hideInactive ? doctors.filter(d => !d.closedOut && !d.isDeactivated) : doctors;
@@ -451,10 +451,9 @@ function layoutHierarchy() {
   if (activeDocs.length === 0) return;
 
   const NODE_WIDTH = 260;
-  const H_GAP = 20;        // gap between leaf children within same parent
-  const SIBLING_GAP = 80;  // extra gap between sibling subtrees
-  const V_SPACING = 200;   // vertical distance between levels
-  const STAGGER = 50;      // vertical offset for alternating sibling groups
+  const H_GAP = 40;         // gap between sibling subtrees under the same parent
+  const V_PAD = 60;         // padding below a parent card before children start
+  const TREE_GAP = 120;     // gap between separate root trees
 
   // Identify roots (no incoming edges)
   const targeted = new Set(activeEdges.map(e => e.to));
@@ -469,8 +468,7 @@ function layoutHierarchy() {
     if (childrenOf[e.from]) childrenOf[e.from].push(e.to);
   });
 
-  // Recursive: calculate subtree width (bottom-up)
-  // Uses SIBLING_GAP between sibling subtrees, H_GAP between leaf children
+  // Pass 1: calculate subtree width (bottom-up)
   const subtreeWidth = {};
   function calcWidth(id) {
     if (visited.has(id)) return 0;
@@ -484,7 +482,7 @@ function layoutHierarchy() {
     let totalW = 0;
     kids.forEach((cid, i) => {
       totalW += calcWidth(cid);
-      if (i < kids.length - 1) totalW += SIBLING_GAP;
+      if (i < kids.length - 1) totalW += H_GAP;
     });
     subtreeWidth[id] = Math.max(NODE_WIDTH, totalW);
     return subtreeWidth[id];
@@ -503,43 +501,43 @@ function layoutHierarchy() {
     }
   });
 
-  // Recursive: place subtree at (xCenter, y)
-  // siblingIndex: which sibling this node is among its parent's children (for stagger)
-  function placeSubtree(id, xCenter, y, siblingIndex) {
+  // Pass 2: place subtree at (xCenter, y)
+  // Vertical gap is based on the parent card's actual height
+  function placeSubtree(id, xCenter, y) {
     const doc = activeDocs.find(d => d.id === id);
     if (!doc) return;
-
-    // Apply vertical stagger: even-indexed siblings at base y, odd ones offset down
-    const staggerOffset = (siblingIndex % 2 === 1) ? STAGGER : 0;
     doc.x = xCenter - NODE_WIDTH / 2;
-    doc.y = y + staggerOffset;
+    doc.y = y;
 
     const kids = childrenOf[id] || [];
     if (kids.length === 0) return;
 
+    // Vertical spacing based on this node's card height
+    const el = document.getElementById('node-' + id);
+    const cardH = el ? el.offsetHeight : estimateNodeHeight(doc);
+    const childY = y + cardH + V_PAD;
+
     const totalChildrenWidth = kids.reduce((sum, cid, i) => {
-      return sum + subtreeWidth[cid] + (i < kids.length - 1 ? SIBLING_GAP : 0);
+      return sum + subtreeWidth[cid] + (i < kids.length - 1 ? H_GAP : 0);
     }, 0);
 
     let cx = xCenter - totalChildrenWidth / 2;
-    kids.forEach((cid, i) => {
+    kids.forEach(cid => {
       const cw = subtreeWidth[cid];
-      placeSubtree(cid, cx + cw / 2, y + staggerOffset + V_SPACING, i);
-      cx += cw + SIBLING_GAP;
+      placeSubtree(cid, cx + cw / 2, childY);
+      cx += cw + H_GAP;
     });
   }
 
   // Place all root subtrees on one horizontal line
-  const TREE_GAP = 100;
-
   let totalRootWidth = roots.reduce((sum, r, i) => {
     return sum + subtreeWidth[r.id] + (i < roots.length - 1 ? TREE_GAP : 0);
   }, 0);
 
   let rx = -totalRootWidth / 2;
-  roots.forEach((r, i) => {
+  roots.forEach(r => {
     const tw = subtreeWidth[r.id];
-    placeSubtree(r.id, rx + tw / 2, 0, 0);
+    placeSubtree(r.id, rx + tw / 2, 0);
     rx += tw + TREE_GAP;
   });
 }
