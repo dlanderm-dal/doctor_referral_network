@@ -2642,9 +2642,23 @@ function load() {
     renderAll(); fitView();
   } catch(e) { console.error('Load error:',e); }
 }
+const DRN_EXPORT_PREFIX = '===== BEGIN_DRN_EXPORT_d8f2a7 =====';
+const DRN_EXPORT_SUFFIX = '===== END_DRN_EXPORT_d8f2a7 =====';
+
+function extractDrnJson(raw) {
+  const startIdx = raw.indexOf(DRN_EXPORT_PREFIX);
+  const endIdx = raw.indexOf(DRN_EXPORT_SUFFIX);
+  if (startIdx !== -1 && endIdx !== -1) {
+    return raw.substring(startIdx + DRN_EXPORT_PREFIX.length, endIdx).trim();
+  }
+  // Fallback: try to find raw JSON (for older exports / plain .json files)
+  return raw.trim();
+}
+
 function exportData() {
-  const data=JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes,viewMode},null,2);
-  const blob=new Blob([data],{type:'application/json'});
+  const data=JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes,viewMode,callListOrder},null,2);
+  const wrapped = DRN_EXPORT_PREFIX + '\n' + data + '\n' + DRN_EXPORT_SUFFIX;
+  const blob=new Blob([wrapped],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='doctor-network.json'; a.click();
   URL.revokeObjectURL(url); toast('Exported!');
@@ -2654,7 +2668,7 @@ function importData(event) {
   const reader=new FileReader();
   reader.onload=e=>{
     try {
-      const data=JSON.parse(e.target.result);
+      const data=JSON.parse(extractDrnJson(e.target.result));
       world.querySelectorAll('.doctor-node').forEach(el=>el.remove());
       doctors=data.doctors||[]; edges=data.edges||[]; nextId=data.nextId||1;
       customTags=data.customTags||[]; tagOverrides=data.tagOverrides||{};
@@ -2692,7 +2706,7 @@ window.importFromPaste = function() {
   const raw = document.getElementById('paste-json-input').value.trim();
   if (!raw) { toast('Paste your JSON first'); return; }
   try {
-    const data = JSON.parse(raw);
+    const data = JSON.parse(extractDrnJson(raw));
     world.querySelectorAll('.doctor-node').forEach(el => el.remove());
     doctors = data.doctors || []; edges = data.edges || []; nextId = data.nextId || 1;
     customTags = data.customTags || []; tagOverrides = data.tagOverrides || {};
@@ -2721,7 +2735,7 @@ window.importFromEmptyPaste = function() {
   const raw = document.getElementById('empty-paste-input').value.trim();
   if (!raw) { toast('Paste your JSON first'); return; }
   try {
-    const data = JSON.parse(raw);
+    const data = JSON.parse(extractDrnJson(raw));
     world.querySelectorAll('.doctor-node').forEach(el => el.remove());
     doctors = data.doctors || []; edges = data.edges || []; nextId = data.nextId || 1;
     customTags = data.customTags || []; tagOverrides = data.tagOverrides || {};
@@ -2747,12 +2761,13 @@ window.importFromEmptyPaste = function() {
 };
 window.copyJsonToClipboard = function() {
   const data = JSON.stringify({doctors, edges, nextId, customTags, tagOverrides, customActionTypes, actionTypeOverrides, globalNotes, viewMode, callListOrder}, null, 2);
-  navigator.clipboard.writeText(data).then(() => {
+  const wrapped = DRN_EXPORT_PREFIX + '\n' + data + '\n' + DRN_EXPORT_SUFFIX;
+  navigator.clipboard.writeText(wrapped).then(() => {
     toast('JSON copied to clipboard!');
   }).catch(() => {
     // Fallback for older browsers / iPad
     const ta = document.createElement('textarea');
-    ta.value = data; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    ta.value = wrapped; ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.appendChild(ta); ta.select(); document.execCommand('copy');
     document.body.removeChild(ta);
     toast('JSON copied to clipboard!');
@@ -2766,7 +2781,7 @@ function handleFileDrop(event) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const data = JSON.parse(e.target.result);
+      const data = JSON.parse(extractDrnJson(e.target.result));
       world.querySelectorAll('.doctor-node').forEach(el => el.remove());
       doctors = data.doctors || []; edges = data.edges || []; nextId = data.nextId || 1;
       customTags = data.customTags || []; tagOverrides = data.tagOverrides || {};
