@@ -15,7 +15,7 @@ let nextId = 1;
 let customTags = [];
 let tagOverrides = {};
 let globalNotes = '';
-let viewMode = 'nucleus';
+let viewMode = 'hierarchy';
 let callListOrder = []; // user-defined order of doctor IDs in the To Call List
 
 let pan = { x: 0, y: 0 };
