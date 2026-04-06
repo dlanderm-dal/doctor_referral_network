@@ -2114,6 +2114,21 @@ window.fitView = function() {
   updateTransform();
 };
 
+// ===== COMMENT MODE =====
+let commentSystemInitialized = false;
+window.toggleCommentMode = function(on) {
+  document.getElementById('comment-system-css').disabled = !on;
+  document.body.classList.toggle('comment-mode', on);
+  if (on && !commentSystemInitialized && typeof CommentSystem !== 'undefined') {
+    CommentSystem.init({
+      storageKey: 'doctor-network-comments',
+      navbarHeight: 50,
+      tabSelector: null,
+    });
+    commentSystemInitialized = true;
+  }
+};
+
 // ===== DEBUG =====
 window.toggleDebug = function() { document.getElementById('debug-output').classList.toggle('open'); };
 window.debugDumpState = function() {
