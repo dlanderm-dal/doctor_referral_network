@@ -1323,6 +1323,35 @@ var CommentSystem = (function () {
       copyText(prompt, quickFixBtn, 'Copy Prompt for Claude Code');
     });
 
+    // ========== LINE NUMBER FETCHING ==========
+    function fetchLineNumbers(comments) {
+      return fetch('/' + filePath)
+        .then(function (res) {
+          if (!res.ok) throw new Error('Server returned ' + res.status);
+          return res.text();
+        })
+        .then(function (html) {
+          var lines = html.split('\n');
+          var lineMap = {};
+          comments.forEach(function (item) {
+            var c = item.comment || item;
+            if (!c.highlightedText) return;
+            var needle = c.highlightedText.trim();
+            if (needle.length < 5) return;
+            for (var i = 0; i < lines.length; i++) {
+              if (lines[i].indexOf(needle) !== -1 || (needle.length > 60 && lines[i].indexOf(needle.substring(0, 60)) !== -1)) {
+                lineMap[c.id] = i + 1;
+                break;
+              }
+            }
+          });
+          return lineMap;
+        })
+        .catch(function () {
+          return {};
+        });
+    }
+
     // ========== BATCH EXPORT (export-ready comments only) ==========
     batchExportBtn.addEventListener('click', function () {
       var allPageComments = getPageComments();
@@ -1354,10 +1383,15 @@ var CommentSystem = (function () {
       var customInstructions = localStorage.getItem(INSTRUCTIONS_KEY) || '';
       var promptFilePath = cfg.promptFilePrefix + currentFile.replace('.html', '') + '.prompt.txt';
 
+      // Fetch line numbers asynchronously, then build the prompt
+      fetchLineNumbers(exportItems).then(function (lineMap) {
+
       var prompt = '';
       if (cfg.architectureFile) {
         prompt += 'FIRST (if you haven\'t already in this conversation): Read `' + cfg.architectureFile + '` -- it is the single source of truth for this project. Follow its conventions.\n\n';
       }
+      prompt += 'FIRST run this setup command (activates the automation hooks for this batch):\n';
+      prompt += '```\ntouch /tmp/lh-annotation-session && echo "' + exportedCommentIds.join(', ') + '" > /tmp/lh-batch-ids.txt\n```\n\n';
       prompt += 'THIS IS AN EXPORTED ANNOTATION BATCH from the annotation system.\n\n';
       prompt += 'Edit the file `' + filePath + '`.\n\n';
 
@@ -1372,6 +1406,7 @@ var CommentSystem = (function () {
       prompt += '  - REORGANIZE: if the comment suggests moving content from elsewhere on the page to this location, do so\n';
       prompt += '  - BUG REPORT: if the comment describes a visual problem (overflow, alignment, sizing), use the DOM path and location context to find and fix the CSS/HTML causing it\n';
       prompt += '- Use the "Location context" (tab name, heading, DOM path) to pinpoint where in the file to make changes\n';
+      prompt += '- For each annotation, identify the exact old_string and new_string for the Edit tool. Do not re-read sections you have already read.\n';
       prompt += '- Assume I know very little about code -- keep explanations simple\n';
       prompt += '- Append these edit requests (with a timestamp header) to `' + promptFilePath + '` as a changelog entry\n';
       prompt += '- CHANGE HIGHLIGHTING: Remove existing `class="lh-new-content"` spans (unwrap them). Wrap ALL new/modified content in `<span class="lh-new-content">...</span>`.\n';
@@ -1384,7 +1419,10 @@ var CommentSystem = (function () {
 
         if (item.type === 'follow-up') {
           prompt += '*This is a follow-up on a previously implemented annotation.*\n\n';
-          if (c.highlightedText) prompt += 'Find this text:\n> ' + c.highlightedText + '\n\n';
+          if (c.highlightedText) {
+            var lineInfo = lineMap[c.id] ? 'Line ' + lineMap[c.id] + ': ' : '';
+            prompt += 'Find this text:\n> ' + lineInfo + c.highlightedText + '\n\n';
+          }
           prompt += 'Original comment: ' + c.note + '\n\n';
           if (c.replies && c.replies.length > 0) {
             prompt += 'Full thread history:\n';
@@ -1395,7 +1433,10 @@ var CommentSystem = (function () {
             prompt += '\n';
           }
         } else {
-          if (c.highlightedText) prompt += 'Find this text:\n> ' + c.highlightedText + '\n\n';
+          if (c.highlightedText) {
+            var lineInfo = lineMap[c.id] ? 'Line ' + lineMap[c.id] + ': ' : '';
+            prompt += 'Find this text:\n> ' + lineInfo + c.highlightedText + '\n\n';
+          }
           if (c.note) prompt += 'My comment: ' + c.note + '\n\n';
           if (c.image) prompt += 'Attached screenshot:\n![Screenshot](' + c.image + ')\n\n';
           if (c.replies && c.replies.length > 0) {
@@ -1428,7 +1469,12 @@ var CommentSystem = (function () {
       saveAllComments(all);
       updateBadge();
 
+      prompt += 'FINALLY, when all edits are complete, run this cleanup command:\n';
+      prompt += '```\nrm -f /tmp/lh-annotation-session /tmp/lh-batch-ids.txt\n```\n';
+
       copyText(prompt, batchExportBtn, 'Export Annotations');
+
+      }); // end fetchLineNumbers.then
     });
 
     // ========== FEEDBACK ==========
