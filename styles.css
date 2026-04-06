@@ -723,11 +723,11 @@ body {
 }
 #dataview-toggle:hover, #debug-toggle:hover { color: #475569; border-color: #cbd5e1; }
 #comment-mode-toggle {
-  padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0;
-  background: white; color: #94a3b8; cursor: pointer; font-size: 11px; font-family: inherit;
-  display: flex; align-items: center; gap: 5px; user-select: none;
+  padding: 4px 8px; border-radius: 4px; border: 1px solid #475569;
+  background: transparent; color: #94a3b8; cursor: pointer; font-size: 10px; font-family: inherit;
+  display: flex; align-items: center; gap: 5px; user-select: none; margin-bottom: 6px;
 }
-#comment-mode-toggle:hover { color: #475569; border-color: #cbd5e1; }
+#comment-mode-toggle:hover { color: #e2e8f0; border-color: #64748b; }
 #comment-mode-cb { width: 12px; height: 12px; accent-color: #f59e0b; }
 #debug-output {
   display: none; position: fixed; bottom: 50px; left: 16px;
@@ -789,6 +789,9 @@ body {
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 
 /* ===== COMMENT SYSTEM: HIDDEN BY DEFAULT ===== */
+/* Push comment navbar below the main toolbar */
+body.comment-mode .lh-navbar { top: 50px !important; z-index: 99 !important; }
+
 body:not(.comment-mode) .lh-navbar,
 body:not(.comment-mode) .lh-sidebar,
 body:not(.comment-mode) .lh-float-bar,

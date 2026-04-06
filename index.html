@@ -95,7 +95,6 @@
 
 <div id="debug-panel">
   <button id="dataview-toggle" onclick="toggleDataView()">Data View</button>
-  <label id="comment-mode-toggle"><input type="checkbox" id="comment-mode-cb" onchange="toggleCommentMode(this.checked)"> Comment Mode</label>
   <button id="debug-toggle" onclick="toggleDebug()">Debug</button>
   <div id="debug-output">
     <div class="debug-actions">
@@ -104,6 +103,7 @@
       <button class="debug-btn" onclick="debugCopyAll()">Copy All</button>
       <button class="debug-btn" onclick="debugClear()">Clear</button>
     </div>
+    <label id="comment-mode-toggle"><input type="checkbox" id="comment-mode-cb" onchange="toggleCommentMode(this.checked)"> Comment Mode</label>
     <div id="debug-content"></div>
   </div>
 </div>
