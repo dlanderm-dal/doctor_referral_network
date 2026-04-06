@@ -49,6 +49,13 @@ body {
   border-radius: 6px; font-family: inherit;
 }
 .tb-dropdown-item:hover { background: #f1f5f9; }
+.tb-dropdown-divider { height: 1px; background: #e2e8f0; margin: 4px 0; }
+.tb-view-opt { display: flex; align-items: center; gap: 8px; }
+.tb-view-dot {
+  width: 10px; height: 10px; border-radius: 50%; border: 2px solid #cbd5e1;
+  display: inline-block; flex-shrink: 0;
+}
+.tb-view-opt.active .tb-view-dot { background: #3b82f6; border-color: #3b82f6; }
 
 /* ===== NOTES PANEL ===== */
 #notes-panel {

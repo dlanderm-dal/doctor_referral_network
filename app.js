@@ -15,6 +15,7 @@ let nextId = 1;
 let customTags = [];
 let tagOverrides = {};
 let globalNotes = '';
+let viewMode = 'nucleus';
 
 let pan = { x: 0, y: 0 };
 let zoom = 1;
@@ -236,6 +237,7 @@ function findComponents() {
 
 function layoutAll() {
   if (doctors.length === 0) return;
+  if (viewMode === 'hierarchy') { layoutHierarchy(); return; }
 
   // Filter: if hiding inactive, exclude closedOut and deactivated doctors
   const hideInactive = document.getElementById('hide-inactive')?.checked || false;
@@ -439,6 +441,124 @@ function layoutAll() {
 }
 
 // Refresh layout — randomizes starting positions then re-runs simulation
+// ===== HIERARCHY LAYOUT =====
+function layoutHierarchy() {
+  const hideInactive = document.getElementById('hide-inactive')?.checked || false;
+  const activeDocs = hideInactive ? doctors.filter(d => !d.closedOut && !d.isDeactivated) : doctors;
+  const activeIds = new Set(activeDocs.map(d => d.id));
+  const activeEdges = edges.filter(e => activeIds.has(e.from) && activeIds.has(e.to));
+
+  if (activeDocs.length === 0) return;
+
+  // Identify roots (no incoming edges)
+  const targeted = new Set(activeEdges.map(e => e.to));
+  const roots = activeDocs.filter(d => !targeted.has(d.id));
+  if (roots.length === 0) roots.push(activeDocs[0]);
+
+  // BFS to assign levels and build tree
+  const level = {};  // docId -> depth level
+  const childrenOf = {}; // docId -> [child docIds]
+  const visited = new Set();
+
+  // Initialize
+  activeDocs.forEach(d => { childrenOf[d.id] = []; });
+
+  // Build adjacency (parent -> children via edges)
+  activeEdges.forEach(e => {
+    if (childrenOf[e.from]) childrenOf[e.from].push(e.to);
+  });
+
+  // BFS from roots
+  const queue = [];
+  roots.forEach(r => { level[r.id] = 0; visited.add(r.id); queue.push(r.id); });
+
+  while (queue.length > 0) {
+    const id = queue.shift();
+    const children = childrenOf[id] || [];
+    children.forEach(cid => {
+      if (!visited.has(cid)) {
+        visited.add(cid);
+        level[cid] = (level[id] || 0) + 1;
+        queue.push(cid);
+      }
+    });
+  }
+
+  // Assign orphans (not reached by BFS) to level 0
+  activeDocs.forEach(d => {
+    if (level[d.id] === undefined) { level[d.id] = 0; visited.add(d.id); }
+  });
+
+  // Group by level
+  const levels = {};
+  activeDocs.forEach(d => {
+    const lv = level[d.id];
+    if (!levels[lv]) levels[lv] = [];
+    levels[lv].push(d);
+  });
+
+  // Place nodes
+  const NODE_WIDTH = 260;
+  const H_SPACING = 300;
+  const V_SPACING = 200;
+
+  const maxLevel = Math.max(...Object.keys(levels).map(Number));
+
+  for (let lv = 0; lv <= maxLevel; lv++) {
+    const nodesAtLevel = levels[lv] || [];
+    const totalWidth = nodesAtLevel.length * H_SPACING;
+    const startX = -totalWidth / 2 + H_SPACING / 2;
+
+    nodesAtLevel.forEach((d, i) => {
+      d.x = startX + i * H_SPACING;
+      d.y = lv * V_SPACING;
+    });
+  }
+
+  // D3-Force collision resolution
+  const simNodes = activeDocs.map(d => ({
+    x: d.x, y: d.y, id: d.id,
+    width: NODE_WIDTH,
+    height: estimateNodeHeight(d)
+  }));
+
+  const sim = d3.forceSimulation(simNodes)
+    .force('collide', d3.forceCollide()
+      .radius(sn => Math.max(sn.width, sn.height) / 2 + 25)
+      .strength(0.7)
+      .iterations(3))
+    .stop();
+
+  for (let i = 0; i < 150; i++) sim.tick();
+
+  // Write back positions, enforce vertical levels
+  simNodes.forEach(sn => {
+    const d = activeDocs.find(doc => doc.id === sn.id);
+    if (d) {
+      d.x = sn.x;
+      d.y = level[d.id] * V_SPACING; // Keep vertical levels strict
+    }
+  });
+}
+
+// ===== VIEW MODE =====
+window.setViewMode = function(mode) {
+  viewMode = mode;
+  // Update radio button UI
+  document.querySelectorAll('.tb-view-opt').forEach(el => el.classList.remove('active'));
+  const activeBtn = document.getElementById('view-' + mode);
+  if (activeBtn) activeBtn.classList.add('active');
+  // Reset positions and re-layout
+  const hideInactive = document.getElementById('hide-inactive')?.checked || false;
+  doctors.forEach(d => {
+    if (!hideInactive || (!d.closedOut && !d.isDeactivated)) { d.x = 0; d.y = 0; }
+  });
+  layoutAll();
+  renderAll();
+  fitView();
+  save();
+};
+
 window.refreshLayout = function() {
   if (doctors.length === 0) return;
   const hideInactive = document.getElementById('hide-inactive')?.checked || false;
@@ -2122,7 +2242,7 @@ window.debugClear = function() { document.getElementById('debug-content').textCo
 
 // ===== PERSISTENCE =====
 function save() {
-  localStorage.setItem('doctor-network', JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes}));
+  localStorage.setItem('doctor-network', JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes,viewMode}));
   showAutosave();
 }
 function load() {
@@ -2133,6 +2253,7 @@ function load() {
     customTags=data.customTags||[]; tagOverrides=data.tagOverrides||{};
     customActionTypes=data.customActionTypes||[]; actionTypeOverrides=data.actionTypeOverrides||{};
     globalNotes=data.globalNotes||'';
+    viewMode=data.viewMode||'nucleus';
     // Migrate: add new fields to existing doctors
     const allTargeted = new Set((data.edges||[]).map(e => e.to));
     doctors.forEach(d => {
@@ -2156,11 +2277,15 @@ function load() {
       }
     });
     document.getElementById('notes-textarea').value=globalNotes;
+    // Update view mode radio UI
+    document.querySelectorAll('.tb-view-opt').forEach(el => el.classList.remove('active'));
+    const activeViewBtn = document.getElementById('view-' + viewMode);
+    if (activeViewBtn) activeViewBtn.classList.add('active');
     renderAll(); fitView();
   } catch(e) { console.error('Load error:',e); }
 }
 function exportData() {
-  const data=JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes},null,2);
+  const data=JSON.stringify({doctors,edges,nextId,customTags,tagOverrides,customActionTypes,actionTypeOverrides,globalNotes,viewMode},null,2);
   const blob=new Blob([data],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='doctor-network.json'; a.click();
@@ -2177,6 +2302,7 @@ function importData(event) {
       customTags=data.customTags||[]; tagOverrides=data.tagOverrides||{};
       customActionTypes=data.customActionTypes||[]; actionTypeOverrides=data.actionTypeOverrides||{};
       globalNotes=data.globalNotes||'';
+      viewMode=data.viewMode||'nucleus';
       doctors.forEach(d => {
         if (d.addedAt === undefined) d.addedAt = new Date().toISOString();
         if (d.isNode === undefined) d.isNode = false;
@@ -2186,6 +2312,9 @@ function importData(event) {
         (d.actions || []).forEach(a => { if (!a.links) a.links = []; });
       });
       document.getElementById('notes-textarea').value=globalNotes;
+      document.querySelectorAll('.tb-view-opt').forEach(el => el.classList.remove('active'));
+      const avb = document.getElementById('view-' + viewMode);
+      if (avb) avb.classList.add('active');
       save(); renderAll(); fitView(); toast('Imported!');
     } catch(err) { toast('Could not load file'); }
   };
@@ -2205,6 +2334,7 @@ function handleFileDrop(event) {
       customTags = data.customTags || []; tagOverrides = data.tagOverrides || {};
       customActionTypes = data.customActionTypes || []; actionTypeOverrides = data.actionTypeOverrides || {};
       globalNotes = data.globalNotes || '';
+      viewMode = data.viewMode || 'nucleus';
       doctors.forEach(d => {
         if (d.addedAt === undefined) d.addedAt = new Date().toISOString();
         if (d.isNode === undefined) d.isNode = false;
@@ -2214,6 +2344,9 @@ function handleFileDrop(event) {
         (d.actions || []).forEach(a => { if (!a.links) a.links = []; });
       });
       document.getElementById('notes-textarea').value = globalNotes;
+      document.querySelectorAll('.tb-view-opt').forEach(el => el.classList.remove('active'));
+      const avb2 = document.getElementById('view-' + viewMode);
+      if (avb2) avb2.classList.add('active');
       save(); renderAll(); fitView(); toast('Loaded!');
     } catch (err) { toast('Could not load file'); }
   };
@@ -2390,3 +2523,8 @@ window.addEventListener('storage', e => {
 
 // ===== INIT =====
 load(); updateTransform(); updateEmpty();
+// Set default view mode radio button
+if (!document.querySelector('.tb-view-opt.active')) {
+  const defBtn = document.getElementById('view-' + viewMode);
+  if (defBtn) defBtn.classList.add('active');
+}

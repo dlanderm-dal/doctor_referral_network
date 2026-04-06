@@ -28,6 +28,13 @@
         <input type="checkbox" id="hide-inactive" onchange="toggleHideInactive()" style="width:14px;height:14px;accent-color:#ef4444">
         Hide Inactive
       </label>
+      <div class="tb-dropdown-divider"></div>
+      <button class="tb-dropdown-item tb-view-opt" id="view-nucleus" onclick="setViewMode('nucleus'); this.closest('.tb-dropdown-wrap').classList.remove('open')">
+        <span class="tb-view-dot"></span> Nucleus View
+      </button>
+      <button class="tb-dropdown-item tb-view-opt" id="view-hierarchy" onclick="setViewMode('hierarchy'); this.closest('.tb-dropdown-wrap').classList.remove('open')">
+        <span class="tb-view-dot"></span> Hierarchy View
+      </button>
     </div>
   </div>
   <div class="tb-dropdown-wrap">
