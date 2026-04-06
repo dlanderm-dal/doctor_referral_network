@@ -451,8 +451,8 @@ function layoutHierarchy() {
   if (activeDocs.length === 0) return;
 
   const NODE_WIDTH = 260;
-  const H_GAP = 40;       // horizontal gap between sibling subtrees
-  const V_SPACING = 220;  // vertical gap between levels
+  const H_GAP = 120;      // horizontal gap between sibling subtrees
+  const V_SPACING = 280;  // vertical gap between levels
 
   // Identify roots (no incoming edges)
   const targeted = new Set(activeEdges.map(e => e.to));
@@ -525,7 +525,7 @@ function layoutHierarchy() {
   }
 
   // Place all root subtrees left to right
-  const TREE_GAP = 80; // gap between separate root trees
+  const TREE_GAP = 200; // gap between separate root trees
   let totalRootWidth = roots.reduce((sum, r, i) => {
     return sum + subtreeWidth[r.id] + (i < roots.length - 1 ? TREE_GAP : 0);
   }, 0);
