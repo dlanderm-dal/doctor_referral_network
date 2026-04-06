@@ -441,7 +441,7 @@ function layoutAll() {
 }
 
 // Refresh layout — randomizes starting positions then re-runs simulation
-// ===== HIERARCHY LAYOUT =====
+// ===== HIERARCHY LAYOUT (tournament bracket) =====
 function layoutHierarchy() {
   const hideInactive = document.getElementById('hide-inactive')?.checked || false;
   const activeDocs = hideInactive ? doctors.filter(d => !d.closedOut && !d.isDeactivated) : doctors;
@@ -450,94 +450,91 @@ function layoutHierarchy() {
 
   if (activeDocs.length === 0) return;
 
+  const NODE_WIDTH = 260;
+  const H_GAP = 40;       // horizontal gap between sibling subtrees
+  const V_SPACING = 220;  // vertical gap between levels
+
   // Identify roots (no incoming edges)
   const targeted = new Set(activeEdges.map(e => e.to));
-  const roots = activeDocs.filter(d => !targeted.has(d.id));
-  if (roots.length === 0) roots.push(activeDocs[0]);
+  let roots = activeDocs.filter(d => !targeted.has(d.id));
+  if (roots.length === 0) roots = [activeDocs[0]];
 
-  // BFS to assign levels and build tree
-  const level = {};  // docId -> depth level
-  const childrenOf = {}; // docId -> [child docIds]
-  const visited = new Set();
-
-  // Initialize
+  // Build adjacency (parent -> children)
+  const childrenOf = {};
   activeDocs.forEach(d => { childrenOf[d.id] = []; });
-
-  // Build adjacency (parent -> children via edges)
+  const visited = new Set();
   activeEdges.forEach(e => {
     if (childrenOf[e.from]) childrenOf[e.from].push(e.to);
   });
 
-  // BFS from roots
-  const queue = [];
-  roots.forEach(r => { level[r.id] = 0; visited.add(r.id); queue.push(r.id); });
-
-  while (queue.length > 0) {
-    const id = queue.shift();
-    const children = childrenOf[id] || [];
-    children.forEach(cid => {
-      if (!visited.has(cid)) {
-        visited.add(cid);
-        level[cid] = (level[id] || 0) + 1;
-        queue.push(cid);
-      }
-    });
-  }
-
-  // Assign orphans (not reached by BFS) to level 0
-  activeDocs.forEach(d => {
-    if (level[d.id] === undefined) { level[d.id] = 0; visited.add(d.id); }
-  });
-
-  // Group by level
-  const levels = {};
-  activeDocs.forEach(d => {
-    const lv = level[d.id];
-    if (!levels[lv]) levels[lv] = [];
-    levels[lv].push(d);
-  });
-
-  // Place nodes
-  const NODE_WIDTH = 260;
-  const H_SPACING = 300;
-  const V_SPACING = 200;
-
-  const maxLevel = Math.max(...Object.keys(levels).map(Number));
-
-  for (let lv = 0; lv <= maxLevel; lv++) {
-    const nodesAtLevel = levels[lv] || [];
-    const totalWidth = nodesAtLevel.length * H_SPACING;
-    const startX = -totalWidth / 2 + H_SPACING / 2;
-
-    nodesAtLevel.forEach((d, i) => {
-      d.x = startX + i * H_SPACING;
-      d.y = lv * V_SPACING;
-    });
-  }
-
-  // D3-Force collision resolution
-  const simNodes = activeDocs.map(d => ({
-    x: d.x, y: d.y, id: d.id,
-    width: NODE_WIDTH,
-    height: estimateNodeHeight(d)
-  }));
-
-  const sim = d3.forceSimulation(simNodes)
-    .force('collide', d3.forceCollide()
-      .radius(sn => Math.max(sn.width, sn.height) / 2 + 25)
-      .strength(0.7)
-      .iterations(3))
-    .stop();
-
-  for (let i = 0; i < 150; i++) sim.tick();
-
-  // Write back positions, enforce vertical levels
-  simNodes.forEach(sn => {
-    const d = activeDocs.find(doc => doc.id === sn.id);
-    if (d) {
-      d.x = sn.x;
-      d.y = level[d.id] * V_SPACING; // Keep vertical levels strict
+  // Recursive: calculate subtree width (bottom-up)
+  const subtreeWidth = {}; // docId -> total pixel width of subtree
+  function calcWidth(id) {
+    if (visited.has(id)) return 0;
+    visited.add(id);
+    const kids = (childrenOf[id] || []).filter(cid => !visited.has(cid));
+    // Store the filtered kids back so we don't revisit
+    childrenOf[id] = kids;
+    if (kids.length === 0) {
+      subtreeWidth[id] = NODE_WIDTH;
+      return NODE_WIDTH;
     }
+    let totalW = 0;
+    kids.forEach((cid, i) => {
+      totalW += calcWidth(cid);
+      if (i < kids.length - 1) totalW += H_GAP;
+    });
+    subtreeWidth[id] = Math.max(NODE_WIDTH, totalW);
+    return subtreeWidth[id];
+  }
+
+  // Reset visited for width calc pass
+  visited.clear();
+  roots.forEach(r => calcWidth(r));
+
+  // Assign orphans as additional roots
+  activeDocs.forEach(d => {
+    if (!visited.has(d.id)) {
+      visited.add(d.id);
+      subtreeWidth[d.id] = NODE_WIDTH;
+      childrenOf[d.id] = [];
+      roots.push(d);
+    }
+  });
+
+  // Recursive: place subtree at (xCenter, y)
+  function placeSubtree(id, xCenter, y) {
+    const doc = activeDocs.find(d => d.id === id);
+    if (!doc) return;
+    doc.x = xCenter - NODE_WIDTH / 2;
+    doc.y = y;
+
+    const kids = childrenOf[id] || [];
+    if (kids.length === 0) return;
+
+    const totalChildrenWidth = kids.reduce((sum, cid, i) => {
+      return sum + subtreeWidth[cid] + (i < kids.length - 1 ? H_GAP : 0);
+    }, 0);
+
+    let cx = xCenter - totalChildrenWidth / 2;
+    kids.forEach(cid => {
+      const cw = subtreeWidth[cid];
+      placeSubtree(cid, cx + cw / 2, y + V_SPACING);
+      cx += cw + H_GAP;
+    });
+  }
+
+  // Place all root subtrees left to right
+  const TREE_GAP = 80; // gap between separate root trees
+  let totalRootWidth = roots.reduce((sum, r, i) => {
+    return sum + subtreeWidth[r.id] + (i < roots.length - 1 ? TREE_GAP : 0);
+  }, 0);
+
+  let rx = -totalRootWidth / 2;
+  roots.forEach(r => {
+    const tw = subtreeWidth[r.id];
+    placeSubtree(r.id, rx + tw / 2, 0);
+    rx += tw + TREE_GAP;
   });
 }
 
@@ -658,36 +655,53 @@ function renderEdges() {
     const fw=240, fh=fe?fe.offsetHeight:100, tw=240, th=te?te.offsetHeight:100;
     const fcx=from.x+fw/2, fcy=from.y+fh/2;
     const tcx=to.x+tw/2, tcy=to.y+th/2;
-    const dx=tcx-fcx, dy=tcy-fcy;
-    const angle=Math.atan2(dy,dx);
-    let x1,y1,x2,y2;
-    if(Math.abs(Math.cos(angle))*(fh/2) > Math.abs(Math.sin(angle))*(fw/2)) {
-      x1=dx>0?from.x+fw:from.x; y1=fcy;
-      x2=dx>0?to.x:to.x+tw; y2=tcy;
-    } else {
-      x1=fcx; y1=dy>0?from.y+fh:from.y;
-      x2=tcx; y2=dy>0?to.y:to.y+th;
-    }
-    const edx=x2-x1, edy=y2-y1, elen=Math.sqrt(edx*edx+edy*edy);
-    if(elen>12) { x2-=(edx/elen)*6; y2-=(edy/elen)*6; }
-    const cpDist=Math.max(50, elen*0.3);
-    const cpx1=x1+Math.cos(angle)*cpDist, cpy1=y1+Math.sin(angle)*cpDist;
-    const cpx2=x2-Math.cos(angle)*cpDist, cpy2=y2-Math.sin(angle)*cpDist;
 
     // Detect cross-tree edge
     const isCrossTree = nodeTreeMap[edge.from] !== undefined && nodeTreeMap[edge.to] !== undefined && nodeTreeMap[edge.from] !== nodeTreeMap[edge.to];
 
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',`M ${x1} ${y1} C ${cpx1} ${cpy1}, ${cpx2} ${cpy2}, ${x2} ${y2}`);
 
-    if (isCrossTree) {
-      path.setAttribute('stroke', '#f59e0b');
-      path.setAttribute('stroke-width', '3.5');
-      path.setAttribute('stroke-dasharray', '8,4');
-      path.setAttribute('marker-end', 'url(#arrowhead-cross)');
-      path.style.opacity = '0.85';
+    if (viewMode === 'hierarchy') {
+      // 90-degree bracket connectors: down from parent bottom, horizontal, down to child top
+      const x1 = fcx, y1 = from.y + fh;  // bottom center of parent
+      const x2 = tcx, y2 = to.y;          // top center of child
+      const midY = y1 + (y2 - y1) / 2;    // horizontal bar midpoint
+      path.setAttribute('d', `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`);
+
+      if (isCrossTree) {
+        path.setAttribute('stroke', '#f59e0b');
+        path.setAttribute('stroke-width', '2.5');
+        path.setAttribute('stroke-dasharray', '6,3');
+        path.style.opacity = '0.7';
+      }
     } else {
-      path.setAttribute('marker-end', 'url(#arrowhead)');
+      // Nucleus mode: bezier curves
+      const dx=tcx-fcx, dy=tcy-fcy;
+      const angle=Math.atan2(dy,dx);
+      let x1,y1,x2,y2;
+      if(Math.abs(Math.cos(angle))*(fh/2) > Math.abs(Math.sin(angle))*(fw/2)) {
+        x1=dx>0?from.x+fw:from.x; y1=fcy;
+        x2=dx>0?to.x:to.x+tw; y2=tcy;
+      } else {
+        x1=fcx; y1=dy>0?from.y+fh:from.y;
+        x2=tcx; y2=dy>0?to.y:to.y+th;
+      }
+      const edx=x2-x1, edy=y2-y1, elen=Math.sqrt(edx*edx+edy*edy);
+      if(elen>12) { x2-=(edx/elen)*6; y2-=(edy/elen)*6; }
+      const cpDist=Math.max(50, elen*0.3);
+      const cpx1=x1+Math.cos(angle)*cpDist, cpy1=y1+Math.sin(angle)*cpDist;
+      const cpx2=x2-Math.cos(angle)*cpDist, cpy2=y2-Math.sin(angle)*cpDist;
+      path.setAttribute('d',`M ${x1} ${y1} C ${cpx1} ${cpy1}, ${cpx2} ${cpy2}, ${x2} ${y2}`);
+
+      if (isCrossTree) {
+        path.setAttribute('stroke', '#f59e0b');
+        path.setAttribute('stroke-width', '3.5');
+        path.setAttribute('stroke-dasharray', '8,4');
+        path.setAttribute('marker-end', 'url(#arrowhead-cross)');
+        path.style.opacity = '0.85';
+      } else {
+        path.setAttribute('marker-end', 'url(#arrowhead)');
+      }
     }
 
     svg.appendChild(path);
